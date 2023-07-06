@@ -1,0 +1,97 @@
+.program prawn_do
+
+.define public TRIGGER_PIN 16 ; hard code trigger to pin 16
+.define public CLOCK_PIN 20 ; Hard code a clock input
+.define public OUTPUT_PIN_BASE 0 ; first pin to output from
+.define public OUTPUT_WIDTH 16 ; number of pins to output from
+
+; To-Do: Adding a hardware trigger
+start:
+wait 1 gpio TRIGGER_PIN
+; Main Execution Loop:
+.wrap_target 
+new_output:
+	; Latest fifo entry is autopulled into the OSR (check C code below)
+	out pins, 32 ; Bit-bashing from the data stored in the OSR to the pins
+
+	; Latest fifo entry is autopulled into the OSR
+	out X, 32 ; store the number of repetitions in the X scratch register 
+
+	jmp !X end ; If the number of repetitions inputted is zero or if the OSR
+			   ; is empty, this will jump out to then determine if there is
+			   ; an indefinite wait or a full stop
+executing_pulse:
+	jmp X-- executing_pulse ; Decrementing the X value and looping back
+	; Automatically loop back to the wrap_target to continue execution
+.wrap 
+
+; The program reaches this point if the number of repetitions is equal to zero 
+; or if the OSR is empty in the main execution loop
+end:
+	out pins, 32 ; Output zero to the pins so that the digial outputs go low
+				 ; by default, otherwise they would hang indefinitely
+
+	jmp !OSRE indefinite_wait ; Checking to see if the user inputted a non-zero
+							  ; number after inputting 0 for the number of reps
+							  ; which would signal an indefinite wait
+
+; The purpose of this section is to continuously loop until the OSR is refilled
+; (by new user input) to prevent the PIO code from doing anything unecessary
+end_loop:
+	jmp !OSRE start ; Check if the user has provided any new input to the
+						 ; OSR (would be autopulled by C code)
+
+	jmp end ; Continuously loop until that input is present
+
+; This section of the code is used for waits that can only be exited by a 
+; hardware trigger
+indefinite_wait:
+	wait 1 gpio TRIGGER_PIN [2] ; Wait for a hardware trigger of at least
+								; three clock cycles (30 ns)
+
+	jmp new_output ; After the hardware trigger, jump back up to the main
+				   ; execution loop to continue
+
+
+% c-sdk {
+pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div, 
+	uint offset){
+	// Set pin direction of output pins to outputs
+	pio_sm_set_consecutive_pindirs(pio, state_machine,
+								   prawn_do_OUTPUT_PIN_BASE,
+								   prawn_do_OUTPUT_WIDTH, true);
+	// Set pin direction of trigger pin to input
+	pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_TRIGGER_PIN, 1, false);
+
+	// Set pin direction of clock pin to input
+	// pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_CLOCK_PIN, 1, false);
+
+	// Initialize gpio for output pins
+	for(uint i = 0; i < prawn_do_OUTPUT_WIDTH; i++){
+		pio_gpio_init(pio, prawn_do_OUTPUT_PIN_BASE + i);
+	}
+	// Initialize gpio for trigger pin
+	pio_gpio_init(pio, prawn_do_TRIGGER_PIN);
+
+	// Initialize gpio for clock pin
+	// pio_gpio_init(pio, prawn_do_CLOCK_PIN);
+
+	// Get config for pio state machine
+	pio_sm_config config = prawn_do_program_get_default_config(offset);
+
+	// Set output pins of config to output pins
+	sm_config_set_out_pins(&config, prawn_do_OUTPUT_PIN_BASE, prawn_do_OUTPUT_WIDTH);
+	// Set input pin of config to trigger pin
+	sm_config_set_in_pins(&config, prawn_do_TRIGGER_PIN);
+	// Set input pin of config to clock pin
+	// sm_config_set_in_pins(&config, prawn_do_CLOCK_PIN);
+
+	// Setup automatic shift on output.
+	// When 32 bits are outputted anywhere within the PIO code,
+	// another entry is pulled from the fifo (the fifo is then refilled via dma)
+	sm_config_set_out_shift(&config, true, true, 32);
+
+	// Complete initialization of state machine.
+	pio_sm_init(pio, state_machine, offset, &config);
+}
+%}
