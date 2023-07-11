@@ -16,11 +16,17 @@ Before plugging in usb, hold down the bootsel button, which should pop-up a wind
 
 # Serial Communication
 Most of the functionality for this serial was developed in Carter Turnbaugh's code.
+
 add - Used to add a digital output pulse, first asks for 16-bit output word in hexadecimal, then asks for the number of repetitions in decimal. If the number of reps is given as zero, then the command will ask for either 0 for a full stop or 1 for an indefinite wait.
+
 adm - Same functionality as add, but allows for multiple repeated pulses to be added (with wait times between each pulse equivalent to how long each pulse is).
+
 run - Used to start waiting for the hardware trigger to begin the programmed sequence of digital outputs.
+
 dmp - Print the current sequence of programmed outputs.
+
 cls - Clear the current sequence of programmed outputs.
+
 
 
 # Clock Sync
