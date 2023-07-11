@@ -6,9 +6,13 @@ This firmware turns pins 0-15 into programmable digital outputs which are trigge
 
 # Specs
 Resolution: 10ns
+
 Max Pulse Rate: 20 MHz
+
 Minimum Pulse Width: 50ns (5 10ns periods)
+
 Maximum Pulse Width: 42.94967295s (2^32 - 1 reps)
+
 Supports Indefinite Waits and Full Stops (Indicated by inputting 0 reps)
 
 # Installing the .uf2 file
