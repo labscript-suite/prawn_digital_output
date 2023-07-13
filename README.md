@@ -15,17 +15,21 @@ Maximum Pulse Width: 42.94967295s (2^32 - 1 reps)
 
 Supports Indefinite Waits and Full Stops (Indicated by inputting 0 reps)
 
+Serial notification of any interruptions mid-sequence after 'abt' command (Currently does not work for interuptions in the middle of the last pulse)
+
 # Installing the .uf2 file
 Before plugging in usb, hold down the bootsel button, which should pop-up a window to drag/drop the .uf2 file into, and when that .uf2 file is added, the window should disappear.
 
 # Serial Communication
-Most of the functionality for this serial was developed in Carter Turnbaugh's code.
+The basis of the functionality for this serial was developed in Carter Turnbaugh's code.
 
 add - Used to add a digital output pulse, first asks for 16-bit output word in hexadecimal, then asks for the number of repetitions in decimal. If the number of reps is given as zero, then the command will ask for either 0 for a full stop or 1 for an indefinite wait.
 
 adm - Same functionality as add, but allows for multiple repeated pulses to be added (with wait times between each pulse equivalent to how long each pulse is).
 
 run - Used to start waiting for the hardware trigger to begin the programmed sequence of digital outputs.
+
+abt - Exit the run sequence
 
 dmp - Print the current sequence of programmed outputs.
 
