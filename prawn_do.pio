@@ -28,31 +28,29 @@ executing_pulse:
 ; The program reaches this point if the number of repetitions is equal to zero 
 ; or if the OSR is empty in the main execution loop
 end:
-	out pins, 32 ; Output zero to the pins so that the digial outputs go low
-				 ; by default, otherwise they would hang indefinitely
+	out Y, 32 ; Store the next OSR entry into the Y scratch register
 
-	jmp !OSRE indefinite_wait ; Checking to see if the user inputted a non-zero
+	jmp !Y stop ; Checking to see if the user inputted a non-zero
 							  ; number after inputting 0 for the number of reps
 							  ; which would signal an indefinite wait
-
-; The purpose of this section is to continuously loop until the OSR is refilled
-; (by new user input) to prevent the PIO code from doing anything unecessary
-end_loop:
-	jmp !OSRE start ; Check if the user has provided any new input to the
-						 ; OSR (would be autopulled by C code)
-
-	jmp end ; Continuously loop until that input is present
-
 ; This section of the code is used for waits that can only be exited by a 
 ; hardware trigger
 indefinite_wait:
-	wait 1 gpio TRIGGER_PIN [2] ; Wait for a hardware trigger of at least
-								; three clock cycles (30 ns)
+	wait 1 gpio TRIGGER_PIN    ; Wait for a hardware trigger
 
 	jmp new_output ; After the hardware trigger, jump back up to the main
 				   ; execution loop to continue
 
+; The purpose of this section is to continuously loop to prevent wrapping
+stop:
+	mov pins, Y ; Output zero to the pins so that the digial outputs go low
+				 ; by default, otherwise they would hang indefinitely
+	
+end_loop:
+	jmp end_loop ; Continuously loop
 
+
+				   
 % c-sdk {
 pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div, 
 	uint offset){
@@ -90,6 +88,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	// When 32 bits are outputted anywhere within the PIO code,
 	// another entry is pulled from the fifo (the fifo is then refilled via dma)
 	sm_config_set_out_shift(&config, true, true, 32);
+
 
 	// Complete initialization of state machine.
 	pio_sm_init(pio, state_machine, offset, &config);
