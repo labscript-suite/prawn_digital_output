@@ -11,16 +11,19 @@
 #include "hardware/pio.h"
 #include "hardware/structs/clocks.h"
 
+
+
 #include "prawn_do.pio.h"
 #include "serial.h"
 
- /* #define CLK_SYNC */
+/* #define CLK_SYNC */
 
 #define LED_PIN 25
 
-#define MAX_DO_CMDS 32768
+#define MAX_DO_CMDS 62873
 uint32_t do_cmds[MAX_DO_CMDS];
 uint32_t do_cmd_count = 0;
+
 
 #define SERIAL_BUFFER_SIZE 256
 char serial_buf[SERIAL_BUFFER_SIZE];
@@ -30,6 +33,8 @@ char serial_buf[SERIAL_BUFFER_SIZE];
 #define STATUS_RUNNING 2
 #define STATUS_ABORTING 3
 int status;
+unsigned short wait = 0;
+unsigned short end = 0;
 
 
 /*
@@ -74,7 +79,6 @@ void start_sm(PIO pio, uint sm, uint dma_chan, uint offset){
 	// Actually start state machine
 	pio_sm_set_enabled(pio, sm, true);	
 }
-
 /*
   Stop pio state machine
 
@@ -143,6 +147,11 @@ int main(){
 		// Abort command: stop run by stopping state machine
 		if(strncmp(serial_buf, "abt", 3) == 0){
 			if(status != STATUS_OFF){ // If already stopped, don't do anything
+				if(pio_sm_get_tx_fifo_level(pio, sm)) {
+					printf("Sequence Not Fully Completed\n");
+				} else {
+					printf("Sequence Successfully Completed\n");
+				}
 				stop_sm(pio, sm, dma_chan);
 				status = STATUS_OFF;
 			}
@@ -162,17 +171,18 @@ int main(){
 			if(status == STATUS_OFF){ // Only start running when not running
 				start_sm(pio, sm, dma_chan, offset);
 				status = STATUS_RUNNING;
+				end = 0;
 			}
 			else{
 				printf("Unable to (restart) run while running, please abort (abt) first\n");
 			}
 		}
 		// Add command: read in hexadecimal integers separated by newlines, 
-		//append to command array
+		// append to command array
 		else if(strncmp(serial_buf, "add", 3) == 0){
+			
 			if(status == STATUS_OFF){ // Only add output states when not running
 				while(do_cmd_count < MAX_DO_CMDS-3){
-					unsigned short wait = 0;
 					printf("Enter 16-bit output word (in hexadecimal) or 'end' to exit\n");
 					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
@@ -182,6 +192,8 @@ int main(){
 						}
 					}
 
+					// Removing the appended zero to not take up unecessary
+					// space (unless the prior command was a wait)
 					if(!wait && do_cmd_count > 0) {
 						do_cmd_count--;
 					} else {
@@ -194,11 +206,19 @@ int main(){
 					do_cmd_count++;
 
 					// Reading in the number of reps
-					printf("Enter number of repetitions or 0 to wait/stop\n");
-					readline(serial_buf, SERIAL_BUFFER_SIZE);
+					do {	
+						printf("Enter number of 10ns repetitions (in decimal) or 0 to wait/stop\n");
 
-					do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 10);
-					printf("%d\n", do_cmds[do_cmd_count]);
+						readline(serial_buf, SERIAL_BUFFER_SIZE);
+
+						do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 10);
+
+						printf("%u\n", do_cmds[do_cmd_count]);
+
+					} while (do_cmds[do_cmd_count] != 0 && do_cmds[do_cmd_count] < 5);
+					if (do_cmds[do_cmd_count] != 0) {
+						do_cmds[do_cmd_count] -= 4;
+					}
 					do_cmd_count++;
 
 					// If reps = 0, then this reads another integer
@@ -209,8 +229,8 @@ int main(){
 						readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 						do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 10);
-						wait = do_cmds[do_cmd_count];
-						printf("%d\n", do_cmds[do_cmd_count]);
+						wait = 1;
+						printf("%u\n", do_cmds[do_cmd_count]);
 						do_cmd_count++;
 
 					// Adding on a zero to the end of the instructions to be
@@ -228,18 +248,101 @@ int main(){
 				printf("Unable to add while running, please abort (abt) first\n");
 			}
 		}
+		// Add multiple command
+		else if(strncmp(serial_buf, "adm", 3) == 0){
+			if(status == STATUS_OFF){ // Only add output states when not running
+				while(do_cmd_count < MAX_DO_CMDS-3){
+					unsigned int num_pulses = 0;
+					uint32_t bits;
+					uint32_t reps;
+
+					printf("Enter 16-bit output word (in hexadecimal) or 'end' to exit\n");
+					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
+
+					if(buf_len >= 3){
+						if(strncmp(serial_buf, "end", 3) == 0){
+							break;
+						}
+					}
+
+					// Removing the appended zero to not take up unecessary
+					// space (unless the prior command was a wait)
+					if(!wait && do_cmd_count > 0) {
+						do_cmd_count--;
+					} else {
+						wait = 0;
+					}
+
+					// Reading in the 16-bit word to output to the pins
+					bits = strtoul(serial_buf, NULL, 16);
+					printf("%d\n", bits);
+
+					// Reading in the number of reps
+					do {
+						printf("Enter number of 10ns repetitions (in decimal) or 0 to wait/stop\n");
+						readline(serial_buf, SERIAL_BUFFER_SIZE);
+
+						reps = strtoul(serial_buf, NULL, 10);
+
+						printf("%u\n", reps);
+
+					} while (reps < 5);
+					reps -= 4;
+
+					// Reading in the multiplicity
+					do {
+					printf("How many pulses?\n");
+					readline(serial_buf, SERIAL_BUFFER_SIZE);
+
+					num_pulses = strtoul(serial_buf, NULL, 10);
+					} while (num_pulses < 0);
+					printf("%u\n", num_pulses);
+					
+					while(num_pulses > 0) {
+						do_cmds[do_cmd_count] = bits;
+						do_cmd_count++;
+
+						do_cmds[do_cmd_count] = reps;
+						do_cmd_count++;
+
+						do_cmds[do_cmd_count] = 0;
+						do_cmd_count++;
+
+						do_cmds[do_cmd_count] = reps;
+						do_cmd_count++;
+
+						num_pulses--;
+					}
+					
+					do_cmds[do_cmd_count] = 0;
+					do_cmd_count++;
+				}
+				if(do_cmd_count == MAX_DO_CMDS-1){
+					printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
+				}
+			}
+			else{
+				printf("Unable to add while running, please abort (abt) first\n");
+			}
+		}
 		// Dump command: print the currently loaded buffered outputs
 		else if(strncmp(serial_buf, "dmp", 3) == 0){
 			// Dump
+			int i = 0;
+			while(i < do_cmd_count) {
+				printf("%d\n", do_cmds[i]);
+				i++;
+			}
 			for(int i = 0; do_cmd_count > 0 && i < do_cmd_count - 1; i++){
 				printf("do_cmd: \n");
-				printf("\t%08x\n", do_cmds[i]);
+				printf("\t%04x\n", do_cmds[i]);
 				i++;
 
-				printf("number of reps:");
-				printf("\t%08d\n", do_cmds[i]);
-
-				if(do_cmds[i] == 0 && i < do_cmd_count) {
+				
+				if(do_cmds[i] != 0) {
+					printf("number of reps:");
+					printf("\t%08d\n", do_cmds[i] + 4);
+				} else {
 					i++;
 					if(do_cmds[i]) {
 						printf("Indefinite Wait\n");
