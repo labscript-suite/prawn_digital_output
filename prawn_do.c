@@ -16,11 +16,9 @@
 #include "prawn_do.pio.h"
 #include "serial.h"
 
-/* #define CLK_SYNC */
-
 #define LED_PIN 25
 
-#define MAX_DO_CMDS 62873
+#define MAX_DO_CMDS 60000
 uint32_t do_cmds[MAX_DO_CMDS];
 uint32_t do_cmd_count = 0;
 
@@ -32,7 +30,11 @@ char serial_buf[SERIAL_BUFFER_SIZE];
 #define STATUS_STARTING 1
 #define STATUS_RUNNING 2
 #define STATUS_ABORTING 3
+
+#define INTERNAL 0
+#define EXTERNAL 1
 int status;
+int clk_status = INTERNAL;
 unsigned short wait = 0;
 unsigned short end = 0;
 
@@ -91,11 +93,28 @@ void stop_sm(PIO pio, uint sm, uint dma_chan){
 	pio_sm_clear_fifos(pio, sm);
 }
 
+void clk_resus(void) {
+	set_sys_clock_khz(100000, false);
+
+	gpio_set_function(20, GPIO_FUNC_NULL);
+
+	clk_status = INTERNAL;
+
+	stdio_init_all();
+
+	printf("System Clock Resus'd\n");
+}
+
 int main(){
+
 	// Setup serial
 	stdio_init_all();
 
+	clocks_init();
+
 	set_sys_clock_khz(100000, false);
+
+	clocks_enable_resus(&clk_resus);
 
 	// Turn on onboard LED (to indicate device is starting)
 	gpio_init(LED_PIN);
@@ -109,12 +128,6 @@ int main(){
 	// Set status to off
 	status = STATUS_OFF;
 
-	#if defined CLK_SYNC
-		// Initialize the clocks to be edited
-		clocks_init();
-	#endif
-
-
 	// Setup PIO
 	PIO pio = pio0;
 	uint sm = pio_claim_unused_sm(pio, true);
@@ -124,11 +137,6 @@ int main(){
 	// initialize prawn_do PIO program on chosen PIO and state machine at 
 	// required offset
 	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
-
-	#if defined CLK_SYNC
-		// Sync the clock with the input from gpio pin 20
-		clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
-	#endif
 
 	while(1){
 		// Prompt for user command
@@ -183,7 +191,10 @@ int main(){
 			
 			if(status == STATUS_OFF){ // Only add output states when not running
 				while(do_cmd_count < MAX_DO_CMDS-3){
-					printf("Enter 16-bit output word (in hexadecimal) or 'end' to exit\n");
+					uint32_t output;
+					uint32_t reps;
+					uint32_t wait_num;
+				
 					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 					if(buf_len >= 3){
@@ -192,6 +203,8 @@ int main(){
 						}
 					}
 
+					sscanf(serial_buf, "%x %x %d", &output, &reps, &wait_num);
+					
 					// Removing the appended zero to not take up unecessary
 					// space (unless the prior command was a wait)
 					if(!wait && do_cmd_count > 0) {
@@ -201,21 +214,11 @@ int main(){
 					}
 
 					// Reading in the 16-bit word to output to the pins
-					do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 16);
-					printf("%d\n", do_cmds[do_cmd_count]);
+					do_cmds[do_cmd_count] = output;
 					do_cmd_count++;
 
-					// Reading in the number of reps
-					do {	
-						printf("Enter number of 10ns repetitions (in decimal) or 0 to wait/stop\n");
+					do_cmds[do_cmd_count] = reps;
 
-						readline(serial_buf, SERIAL_BUFFER_SIZE);
-
-						do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 10);
-
-						printf("%u\n", do_cmds[do_cmd_count]);
-
-					} while (do_cmds[do_cmd_count] != 0 && do_cmds[do_cmd_count] < 5);
 					if (do_cmds[do_cmd_count] != 0) {
 						do_cmds[do_cmd_count] -= 4;
 					}
@@ -224,13 +227,9 @@ int main(){
 					// If reps = 0, then this reads another integer
 					// If the number is zero, that signifies a full stop,
 					// otherwise this will cause an indefitine wait
-					if(do_cmds[do_cmd_count - 1] == 0) {
-						printf("Enter 0 for full stop or 1 for an indefinite wait\n");
-						readline(serial_buf, SERIAL_BUFFER_SIZE);
-
-						do_cmds[do_cmd_count] = strtoul(serial_buf, NULL, 10);
+					if(reps == 0) {
+						do_cmds[do_cmd_count] = wait_num;
 						wait = 1;
-						printf("%u\n", do_cmds[do_cmd_count]);
 						do_cmd_count++;
 
 					// Adding on a zero to the end of the instructions to be
@@ -239,6 +238,7 @@ int main(){
 						do_cmds[do_cmd_count] = 0;
 						do_cmd_count++;
 					}
+					
 				}
 				if(do_cmd_count == MAX_DO_CMDS-1){
 					printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
@@ -252,11 +252,12 @@ int main(){
 		else if(strncmp(serial_buf, "adm", 3) == 0){
 			if(status == STATUS_OFF){ // Only add output states when not running
 				while(do_cmd_count < MAX_DO_CMDS-3){
+					unsigned int num_inputs = 0;
 					unsigned int num_pulses = 0;
-					uint32_t bits;
+					uint32_t output;
 					uint32_t reps;
-
-					printf("Enter 16-bit output word (in hexadecimal) or 'end' to exit\n");
+					uint32_t waits;
+				
 					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 					if(buf_len >= 3){
@@ -264,6 +265,8 @@ int main(){
 							break;
 						}
 					}
+
+					num_inputs = sscanf(serial_buf, "%x %x %d %x", &output, &reps, &num_pulses, &waits);
 
 					// Removing the appended zero to not take up unecessary
 					// space (unless the prior command was a wait)
@@ -273,33 +276,15 @@ int main(){
 						wait = 0;
 					}
 
-					// Reading in the 16-bit word to output to the pins
-					bits = strtoul(serial_buf, NULL, 16);
-					printf("%d\n", bits);
-
-					// Reading in the number of reps
-					do {
-						printf("Enter number of 10ns repetitions (in decimal) or 0 to wait/stop\n");
-						readline(serial_buf, SERIAL_BUFFER_SIZE);
-
-						reps = strtoul(serial_buf, NULL, 10);
-
-						printf("%u\n", reps);
-
-					} while (reps < 5);
 					reps -= 4;
-
-					// Reading in the multiplicity
-					do {
-					printf("How many pulses?\n");
-					readline(serial_buf, SERIAL_BUFFER_SIZE);
-
-					num_pulses = strtoul(serial_buf, NULL, 10);
-					} while (num_pulses < 0);
-					printf("%u\n", num_pulses);
+					if (num_inputs < 4) {
+						waits = reps;
+					} else {
+						waits -= 4;
+					}
 					
 					while(num_pulses > 0) {
-						do_cmds[do_cmd_count] = bits;
+						do_cmds[do_cmd_count] = output;
 						do_cmd_count++;
 
 						do_cmds[do_cmd_count] = reps;
@@ -308,7 +293,7 @@ int main(){
 						do_cmds[do_cmd_count] = 0;
 						do_cmd_count++;
 
-						do_cmds[do_cmd_count] = reps;
+						do_cmds[do_cmd_count] = waits;
 						do_cmd_count++;
 
 						num_pulses--;
@@ -341,7 +326,7 @@ int main(){
 				
 				if(do_cmds[i] != 0) {
 					printf("number of reps:");
-					printf("\t%08d\n", do_cmds[i] + 4);
+					printf("\t%d\n", do_cmds[i] + 4);
 				} else {
 					i++;
 					if(do_cmds[i]) {
@@ -349,6 +334,55 @@ int main(){
 					} else {
 						printf("Full Stop\n");
 					}
+				}
+			}
+		} else if (strncmp(serial_buf, "clk", 3) == 0) {
+			if (strncmp(serial_buf + 4, "ext", 3) == 0) {
+				// Sync the clock with the input from gpio pin 20
+				clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
+				clk_status = EXTERNAL;
+			} else if (strncmp(serial_buf + 4, "int", 3) == 0) {
+				set_sys_clock_khz(100000, false);
+				gpio_set_function(20, GPIO_FUNC_NULL);
+				clk_status = INTERNAL;
+			} else if (strncmp(serial_buf + 4, "set", 3) == 0) {
+				unsigned int clock_freq;
+				sscanf(serial_buf + 8, "%d", &clock_freq);
+				if (clk_status == INTERNAL) {
+					set_sys_clock_khz(clock_freq / 1000, false);
+				} else {
+					clock_configure_gpin(clk_sys, 20, clock_freq, clock_freq);
+				}
+			}
+		} else if (strncmp(serial_buf, "edt", 3) == 0) {
+			if (do_cmd_count > 0) {
+				uint32_t output;
+				uint32_t reps;
+				uint32_t waits;
+			
+				readline(serial_buf, SERIAL_BUFFER_SIZE);
+
+				sscanf(serial_buf, "%x %x %x", &output, &reps, &waits);
+
+				do_cmds[do_cmd_count - 3] = output;
+				do_cmds[do_cmd_count - 2] = reps;
+
+				if (output == 0 && reps == 0) {
+					do_cmds[do_cmd_count - 1] = waits;
+					wait = 1;
+				} else {
+					do_cmds[do_cmd_count - 1] = 0;
+				}
+			}
+		} else if (strncmp(serial_buf, "cur", 3) == 0) {
+			printf("Output: %x\n", do_cmds[do_cmd_count - 3]);
+			printf("Reps: %x\n", do_cmds[do_cmd_count - 2] + 4);
+
+			if (do_cmds[do_cmd_count - 3] == 0 && do_cmds[do_cmd_count - 2] == 0) {
+				if (do_cmds[do_cmd_count - 1]) {
+					printf("Indefinite Wait\n");
+				} else {
+					printf("Full Stop\n");
 				}
 			}
 		}
