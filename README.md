@@ -43,11 +43,11 @@ dmp - Print the current sequence of programmed outputs.
 
 cls - Clear the current sequence of programmed outputs.
 
-clk ext: Sets the system clock to the clock input at GPIO pin 20.
+clk ext - Sets the system clock to the clock input at GPIO pin 20.
 
-clk int: Sets the system clock to the internal system clock.
+clk int - Sets the system clock to the internal system clock.
 
-clk set <clock frequency in decimal>: Sets the clock to the specified clock frequency.
+clk set <clock frequency in decimal> - Sets the clock to the specified clock frequency.
 
 cur - Prints the last command entered.
 
