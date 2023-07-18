@@ -29,11 +29,11 @@ The basis of the functionality for this serial was developed in Carter Turnbaugh
 
 add - Sets the pico to accept instructions in the format shown below and append them into memory. 'end' exits the add mode.
 
-FORMAT: <output word in hex> <number of reps in hex> <Full Stop (0) or Indefinite Wait (1)>
+FORMAT: <output word (in hex)> <number of reps (in hex)> <full stop (0) or indefinite wait (1)>
 
 adm - Same functionality as add, but allows for multiple repeated pulses to be added in the format below. Allows for an optionally controlled wait reps between pulses, otherwise by default the wait reps equals the input reps. 'end' command exits this mode.
 
-FORMAT: <output word in hex> <number of reps in hex> <number of pulses in decimal> <OPTIONAL: wait reps in hex>
+FORMAT: <output word (in hex)> <number of reps (in hex)> <number of pulses (in decimal)> <OPTIONAL: wait reps in hex>
 
 run - Used to start waiting for the hardware trigger to begin the programmed sequence of digital outputs.
 
