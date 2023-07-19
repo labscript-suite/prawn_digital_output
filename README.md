@@ -27,6 +27,8 @@ Before plugging in usb, hold down the bootsel button, which should pop-up a wind
 # Serial Communication
 The basis of the functionality for this serial was developed in Carter Turnbaugh's code.
 
+Commands are separated by a newline character: '\n'
+
 add - Sets the pico to accept instructions in the format shown below and append them into memory. 'end' exits the add mode.
 
 FORMAT: <output word (in hex)> <number of reps (in hex)> <full stop (0) or indefinite wait (1)>
