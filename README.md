@@ -29,11 +29,11 @@ The basis of the functionality for this serial was developed in Carter Turnbaugh
 
 Commands are separated by a newline character: '\n'
 
-add - Sets the pico to accept instructions in the format shown below and append them into memory. 'end' exits the add mode.
+add - Sets the pico to accept instructions in the format shown below and append them into memory. Inputting 0 for reps indicates either a full stop (0) or indefinite wait (1), specified by a space, then the number after reps. 'end' exits the add mode.
 
-FORMAT: <output word (in hex)> <number of reps (in hex)> <full stop (0) or indefinite wait (1)>
+FORMAT: <output word (in hex)> <number of reps (in hex)> <IF REPS = 0:full stop (0) or indefinite wait (1)>
 
-adm - Same functionality as add, but allows for multiple repeated pulses to be added in the format below. Allows for an optionally controlled wait reps between pulses, otherwise by default the wait reps equals the input reps. 'end' command exits this mode.
+adm - Same functionality as add, but allows for multiple repeated pulses to be added in the format below. Allows for an optionally controlled wait reps between pulses, otherwise by default the wait reps equals the input reps. 'end' command exits this mode. Currently does not support indefinite waits or full stops.
 
 FORMAT: <output word (in hex)> <number of reps (in hex)> <number of pulses (in decimal)> <OPTIONAL: wait reps in hex>
 
