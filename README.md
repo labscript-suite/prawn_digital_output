@@ -61,3 +61,27 @@ ndb - Turns off debugging mode.
 
 # Clock Sync
 A firmware that includes a clock sync is available, and this prevents any significant phase slip between a pseudoclock and this digital output controller. By default, the clock accepts a 100 MHz clock input.
+
+# Example:
+Setting one output high for 1 microsecond, then low while setting the output high for 1 microsecond (64 in hex = 100 in decimal) for 6 outputs, then stopping:
+
+Commands:
+
+add
+
+1 64
+
+2 64
+
+4 64
+
+8 64
+
+10 64
+
+20 64
+
+0 0 0
+
+<img width="470" alt="documentation" src="https://github.com/pmiller2022/prawn_digital_output/assets/75953337/932b784f-346f-4598-8679-b857578e0291">
+
