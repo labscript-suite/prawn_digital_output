@@ -9,7 +9,7 @@
 start:
 wait 1 gpio TRIGGER_PIN
 ; Main Execution Loop:
-.wrap_target 
+.wrap_target
 new_output:
 	; Latest fifo entry is autopulled into the OSR (check C code below)
 	out pins, 32 ; Bit-bashing from the data stored in the OSR to the pins
@@ -23,14 +23,13 @@ new_output:
 executing_pulse:
 	jmp X-- executing_pulse ; Decrementing the X value and looping back
 	; Automatically loop back to the wrap_target to continue execution
-.wrap 
-
+.wrap
 ; The program reaches this point if the number of repetitions is equal to zero 
 ; or if the OSR is empty in the main execution loop
 end:
 	out Y, 32 ; Store the next OSR entry into the Y scratch register
 
-	jmp !Y stop ; Checking to see if the user inputted a non-zero
+	jmp !Y end_loop ; Checking to see if the user inputted a non-zero
 							  ; number after inputting 0 for the number of reps
 							  ; which would signal an indefinite wait
 ; This section of the code is used for waits that can only be exited by a 
@@ -42,10 +41,6 @@ indefinite_wait:
 				   ; execution loop to continue
 
 ; The purpose of this section is to continuously loop to prevent wrapping
-stop:
-	mov pins, Y ; Output zero to the pins so that the digial outputs go low
-				 ; by default, otherwise they would hang indefinitely
-	
 end_loop:
 	jmp end_loop ; Continuously loop
 
@@ -62,7 +57,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_TRIGGER_PIN, 1, false);
 
 	// Set pin direction of clock pin to input
-	// pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_CLOCK_PIN, 1, false);
+	   pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_CLOCK_PIN, 1, false);
 
 	// Initialize gpio for output pins
 	for(uint i = 0; i < prawn_do_OUTPUT_WIDTH; i++){
@@ -72,7 +67,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	pio_gpio_init(pio, prawn_do_TRIGGER_PIN);
 
 	// Initialize gpio for clock pin
-	// pio_gpio_init(pio, prawn_do_CLOCK_PIN);
+	   pio_gpio_init(pio, prawn_do_CLOCK_PIN);
 
 	// Get config for pio state machine
 	pio_sm_config config = prawn_do_program_get_default_config(offset);
@@ -82,7 +77,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	// Set input pin of config to trigger pin
 	sm_config_set_in_pins(&config, prawn_do_TRIGGER_PIN);
 	// Set input pin of config to clock pin
-	// sm_config_set_in_pins(&config, prawn_do_CLOCK_PIN);
+	   sm_config_set_in_pins(&config, prawn_do_CLOCK_PIN);
 
 	// Setup automatic shift on output.
 	// When 32 bits are outputted anywhere within the PIO code,
