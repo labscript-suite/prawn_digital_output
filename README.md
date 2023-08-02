@@ -1,6 +1,6 @@
 # Prawn Digital Output
 
-This program is built off of the digital output program developed by Carter Turnbaugh (https://github.com/carterturn/prawn_do/tree/basis), with changes done to the PIO code so that the Raspberry Pi Pico can time itself to allow for a smaller minimum pulse width. Inspiration for the PIO code came from Philip Starkey's PrawnBlaster PIO code (https://github.com/labscript-suite/PrawnBlaster/tree/master). 
+This program is built off of the [digital output program](https://github.com/carterturn/prawn_do/tree/basis) developed by Carter Turnbaugh, with changes done to the PIO code so that the Raspberry Pi Pico can time itself to allow for a smaller minimum pulse width. Inspiration for the PIO code came from Philip Starkey's [PrawnBlaster PIO code](https://github.com/labscript-suite/PrawnBlaster/tree/master). 
 
 This firmware turns pins 0-15 into programmable digital outputs which are triggered by input to pin 16.
 
@@ -11,7 +11,7 @@ Pin 20 is reserved for optional external clock syncing.
 * `Max Pulse Rate`: 20 MHz
 * `Minimum Pulse Width`: 50ns (5 10ns periods)
 * `Maximum Pulse Width`: 42.94967295s (2^32 - 1 reps)
-* `Max Instructions`: 30,000
+* `Max Instructions`: 30,000 (23,000 inside Labscript)
 * Supports Indefinite Waits and Full Stops (Indicated by inputting 0 reps)
 * Serial notification of any interruptions mid-sequence after 'abt' command (Currently does not work for interuptions in the middle of the last pulse)
 
