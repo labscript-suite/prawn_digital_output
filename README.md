@@ -36,6 +36,7 @@ Commands are separated by a newline character: '\n'
 * `edt` - Allows the user to enter a new command to replace the last command entered.
 * `deb` - Turns on debugging mode which adds printed output when adding instructions. By default, debugging is off.
 * `ndb` - Turns off debugging mode.
+* `ver` - Displays the version of the PrawnDO code.
 
 ## Clock Sync
 A firmware that includes a clock sync is available, and this prevents any significant phase slip between a pseudoclock and this digital output controller. By default, the clock accepts a 100 MHz clock input.
