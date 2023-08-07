@@ -38,7 +38,7 @@ int clk_status = INTERNAL;
 unsigned short wait = 0;
 unsigned short end = 0;
 unsigned short debug = 0;
-const char ver[6] = '1.0.0'
+const char ver[6] = "1.0.0";
 
 
 /*
@@ -510,7 +510,7 @@ int main(){
 			// Turning debug mode off
 			debug = 0;
 		} else if(strncmp(serial_buf, "ver", 3) == 0) {
-			printf("Version: %s\n", ver)
+			printf("Version: %s\n", ver);
 		}
 		else{
 			printf("Invalid command: %s\n", serial_buf);
