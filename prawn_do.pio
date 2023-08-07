@@ -5,14 +5,16 @@
 .define public OUTPUT_PIN_BASE 0 ; first pin to output from
 .define public OUTPUT_WIDTH 16 ; number of pins to output from
 
-; To-Do: Adding a hardware trigger
+; Immediately output the first entry so the outputs could be manually triggered
+out pins, 32
+
 start:
 wait 1 gpio TRIGGER_PIN
 ; Main Execution Loop:
 .wrap_target
 new_output:
 	; Latest fifo entry is autopulled into the OSR (check C code below)
-	out pins, 32 ; Bit-bashing from the data stored in the OSR to the pins
+	out pins, 32 ; Bit-banging from the data stored in the OSR to the pins
 
 	; Latest fifo entry is autopulled into the OSR
 	out X, 32 ; store the number of repetitions in the X scratch register 
@@ -53,6 +55,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	pio_sm_set_consecutive_pindirs(pio, state_machine,
 								   prawn_do_OUTPUT_PIN_BASE,
 								   prawn_do_OUTPUT_WIDTH, true);
+
 	// Set pin direction of trigger pin to input
 	pio_sm_set_consecutive_pindirs(pio, state_machine, prawn_do_TRIGGER_PIN, 1, false);
 
@@ -63,11 +66,12 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	for(uint i = 0; i < prawn_do_OUTPUT_WIDTH; i++){
 		pio_gpio_init(pio, prawn_do_OUTPUT_PIN_BASE + i);
 	}
+
 	// Initialize gpio for trigger pin
 	pio_gpio_init(pio, prawn_do_TRIGGER_PIN);
 
 	// Initialize gpio for clock pin
-	   pio_gpio_init(pio, prawn_do_CLOCK_PIN);
+	pio_gpio_init(pio, prawn_do_CLOCK_PIN);
 
 	// Get config for pio state machine
 	pio_sm_config config = prawn_do_program_get_default_config(offset);
@@ -77,7 +81,7 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	// Set input pin of config to trigger pin
 	sm_config_set_in_pins(&config, prawn_do_TRIGGER_PIN);
 	// Set input pin of config to clock pin
-	   sm_config_set_in_pins(&config, prawn_do_CLOCK_PIN);
+	sm_config_set_in_pins(&config, prawn_do_CLOCK_PIN);
 
 	// Setup automatic shift on output.
 	// When 32 bits are outputted anywhere within the PIO code,
