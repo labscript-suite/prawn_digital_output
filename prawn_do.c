@@ -240,7 +240,7 @@ int main(){
 					// that
 					if (debug) {
 						printf("Output: %x\n", output);
-						printf("Number of Reps (Decimal): %d\n", reps);
+						printf("Number of Reps: %d\n", reps);
 
 						if (num_inputs > 2 && reps == 0) {
 							if (wait_num) {
@@ -323,7 +323,7 @@ int main(){
 					// pulses and waits variables, and stores the return value
 					// of sscanf (the number of variables successfully read)
 					// to determine if the user specified wait length or not 
-					num_inputs = sscanf(serial_buf, "%x %x %d %x", &output, &reps, &num_pulses, &waits);
+					num_inputs = sscanf(serial_buf, "%x %x %x %d", &output, &reps, &num_pulses, &waits);
 
 					} while (num_inputs < 3);
 
@@ -337,7 +337,7 @@ int main(){
 					if (debug) {
 						printf("Output: %x\n", output);
 						printf("Number of Reps (Decimal): %d\n", reps);
-						printf("Number of Pulses: %d\n", num_pulses);
+						printf("Number of Pulses (Decimal): %d\n", num_pulses);
 
 						if (num_inputs > 3) {
 							printf("Wait Length (Decimal): %d\n", waits);
