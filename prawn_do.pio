@@ -31,13 +31,24 @@ executing_pulse:
 end:
 	out Y, 32 ; Store the next OSR entry into the Y scratch register
 
-	jmp !Y end_loop ; Checking to see if the user inputted a non-zero
-							  ; number after inputting 0 for the number of reps
-							  ; which would signal an indefinite wait
+	out X, 32 ; Store the number of reps in the X scratch register
+
+	jmp !X end_loop ; If reps equals zero, then jump to end, otherwise indefinite wait
 ; This section of the code is used for waits that can only be exited by a 
 ; hardware trigger
 indefinite_wait:
 	wait 1 gpio TRIGGER_PIN    ; Wait for a hardware trigger
+
+	mov pins, Y ; Move the output word stored in Y to the pins
+
+	nop ; Skip one cycle for alignment purposes
+
+	; Loop for each rep until the rep counter is zero
+	end_indefinite_wait_loop:
+	jmp X-- end_indefinite_wait_loop
+
+	; Jump to the top and continue executing commands
+	jmp new_output
 
 	jmp new_output ; After the hardware trigger, jump back up to the main
 				   ; execution loop to continue
