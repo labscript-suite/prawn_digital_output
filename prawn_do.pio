@@ -43,8 +43,8 @@ indefinite_wait:
 
 	nop ; Skip one cycle for alignment purposes
 
-	; Loop for each rep until the rep counter is zero
-	end_indefinite_wait_loop:
+; Loop for each rep until the rep counter is zero
+end_indefinite_wait_loop:
 	jmp X-- end_indefinite_wait_loop
 
 	; Jump to the top and continue executing commands
