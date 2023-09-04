@@ -207,7 +207,6 @@ int main(){
 				while(do_cmd_count < MAX_DO_CMDS-3){
 					uint32_t output;
 					uint32_t reps;
-					uint32_t wait_num;
 					unsigned short num_inputs = 0;
 
 					do {
@@ -226,7 +225,7 @@ int main(){
 					// output, reps, and wait_num variables. Also storing the return
 					// value of sscanf (number of variables successfully read in)
 					// to determine if the user wants to program a stop/wait
-					num_inputs = sscanf(serial_buf, "%x %x %d", &output, &reps, &wait_num);
+					num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
 
 					} while (num_inputs < 2);
 
@@ -242,22 +241,11 @@ int main(){
 						printf("Output: %x\n", output);
 						printf("Number of Reps: %d\n", reps);
 
-						if (num_inputs > 2 && reps == 0) {
-							if (wait_num) {
-								printf("Indefinite Wait\n");
-							} else {
-								printf("Full Stop\n");
-							}
+						if (reps == 0){
+							printf("Wait");
 						}
 					}
-					
-					// Removing the appended zero to not take up unecessary
-					// space (unless the prior command was a wait)
-					if(!wait && do_cmd_count > 0) {
-						do_cmd_count--;
-					} else {
-						wait = 0;
-					}
+
 
 					// Reading in the 16-bit word to output to the pins
 					do_cmds[do_cmd_count] = output;
@@ -273,20 +261,6 @@ int main(){
 					}
 					do_cmd_count++;
 
-					// If reps = 0, then this reads another integer
-					// If the number is zero, that signifies a full stop,
-					// otherwise this will cause an indefitine wait
-					if(reps == 0) {
-						do_cmds[do_cmd_count] = wait_num;
-						wait = 1;
-						do_cmd_count++;
-
-					// Adding on a zero to the end of the instructions to be
-					// outputted to the pins to make sure it goes low at the end	
-					} else {
-						do_cmds[do_cmd_count] = 0;
-						do_cmd_count++;
-					}
 					
 				}
 				if(do_cmd_count == MAX_DO_CMDS-1){
@@ -382,9 +356,6 @@ int main(){
 						num_pulses--;
 					}
 					
-					// Setting the last spot in memory to 0 for alighnment purposes
-					do_cmds[do_cmd_count] = 0;
-					do_cmd_count++;
 				}
 				if(do_cmd_count == MAX_DO_CMDS-1){
 					printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
@@ -406,17 +377,13 @@ int main(){
 				// Either printing out the number of reps, or if the number
 				// of reps equals zero printing out whether it is a full stop
 				// or an indefinite wait
-				if(do_cmds[i] != 0) {
-					printf("number of reps:");
-					printf("\t%d\n", do_cmds[i] + 4);
-				} else {
-					i++;
-					if(do_cmds[i]) {
-						printf("Indefinite Wait\n");
-					} else {
-						printf("Full Stop\n");
-					}
+				printf("number of reps:");
+				printf("\t%d\n", do_cmds[i] + 4);
+
+				if (do_cmds[i] == 0){
+					printf("Wait");
 				}
+				
 			}
 		} else if (strncmp(serial_buf, "clk", 3) == 0) {
 			if (strncmp(serial_buf + 4, "ext", 3) == 0) {
@@ -452,7 +419,6 @@ int main(){
 			if (do_cmd_count > 0) {
 				uint32_t output;
 				uint32_t reps;
-				uint32_t waits;
 				unsigned short num_inputs;
 			
 				do {
@@ -461,48 +427,24 @@ int main(){
 
 				// Storing the input from the user into the respective output,
 				// reps, and waits variables to be stored in memory
-				num_inputs = sscanf(serial_buf, "%x %x %x", &output, &reps, &waits);
+				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
 
 				} while (num_inputs < 2);
 				// Immediately replacing the output and reps stored for the
 				// last sequence with the newly inputted values
-				do_cmds[do_cmd_count - 3] = output;
-				do_cmds[do_cmd_count - 2] = reps;
+				do_cmds[do_cmd_count - 2] = output;
+				do_cmds[do_cmd_count - 1] = reps;
 
-				// If the number of reps equals zero, then the last value in
-				// the array stores the value for either full stop or indefinite
-				// wait
-				if (reps == 0) {
-					do_cmds[do_cmd_count - 1] = waits;
-					wait = 1;
-				} else {
-					// If the new command is not a wait, this adjusts the reps
-					// to fit the inital 40ns delay and store zero in the last
-					// value for alignment purposes
-					do_cmds[do_cmd_count - 2] -= 4;
-					do_cmds[do_cmd_count - 1] = 0;
-				}
 			}
 		// Printing out the latest digital output command added to the current 
 		// running program
 		} else if (strncmp(serial_buf, "cur", 3) == 0) {
-			// First checking if the last command was an indefinite wait/stop
-			// or if it was a regular output command
-			if (do_cmds[do_cmd_count - 2] == 0) {
-				// If it was a wait/stop, this just prints the output word
-				// and whether it was a full stop or indefinite wait
-				printf("Output: %x\n", do_cmds[do_cmd_count - 3]);
-				if (do_cmds[do_cmd_count - 1]) {
-					printf("Indefinite Wait\n");
-				} else {
-					printf("Full Stop\n");
+				printf("Output: %x\n", do_cmds[do_cmd_count - 2]);
+				printf("Reps: %d\n", do_cmds[do_cmd_count - 1] + 4);
+				if(do_cmds[do_cmd_count - 1] == 0){
+					printf("Wait");
 				}
-			} else {
-				// Otherwise this prints the output word followed by the number
-				// reps
-				printf("Output: %x\n", do_cmds[do_cmd_count - 3]);
-				printf("Reps: %d\n", do_cmds[do_cmd_count - 2] + 4);
-			}
+		
 		} else if (strncmp(serial_buf, "deb", 3) == 0) {
 			// Turning debug mode on
 			debug = 1;
