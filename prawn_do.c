@@ -246,7 +246,7 @@ int main(){
 						printf("Number of Reps: %d\n", reps);
 
 						if (reps == 0){
-							printf("Wait");
+							printf("Wait\n");
 						}
 					}
 
@@ -374,18 +374,17 @@ int main(){
 			// Dump
 			for(int i = 0; do_cmd_count > 0 && i < do_cmd_count - 1; i++){
 				// Printing out the output word
-				printf("do_cmd: \n");
-				printf("\t%04x\n", do_cmds[i]);
+				printf("do_cmd: %04x\n", do_cmds[i]);
 				i++;
 
 				// Either printing out the number of reps, or if the number
 				// of reps equals zero printing out whether it is a full stop
 				// or an indefinite wait
-				printf("number of reps:");
-				printf("\t%d\n", do_cmds[i] + 4);
-
 				if (do_cmds[i] == 0){
-					printf("Wait");
+					printf("\tWait\n");
+				}
+				else {
+					printf("\tnumber of reps: %d\n", do_cmds[i]+4);
 				}
 				
 			}
@@ -446,7 +445,7 @@ int main(){
 				printf("Output: %x\n", do_cmds[do_cmd_count - 2]);
 				printf("Reps: %d\n", do_cmds[do_cmd_count - 1] + 4);
 				if(do_cmds[do_cmd_count - 1] == 0){
-					printf("Wait");
+					printf("Wait\n");
 				}
 		
 		} else if (strncmp(serial_buf, "deb", 3) == 0) {
