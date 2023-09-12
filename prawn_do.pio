@@ -7,6 +7,8 @@
 
 ; Immediately output the first entry so the outputs could be manually triggered
 out pins, 32
+; pop off dummy reps value from OSR
+out X, 32
 
 start:
 wait 1 gpio TRIGGER_PIN
@@ -49,9 +51,6 @@ end_indefinite_wait_loop:
 
 	; Jump to the top and continue executing commands
 	jmp new_output
-
-	jmp new_output ; After the hardware trigger, jump back up to the main
-				   ; execution loop to continue
 
 ; The purpose of this section is to continuously loop to prevent wrapping
 end_loop:
