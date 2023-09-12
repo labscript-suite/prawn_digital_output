@@ -178,6 +178,10 @@ int main(){
 				status = STATUS_OFF;
 			}
 		}
+		// Status command: return running status
+		if(strncmp(serial_buf, "sts", 3) == 0){
+			printf("%d\n", status);
+		}
 		// Clear command: empty the buffered outputs
 		else if(strncmp(serial_buf, "cls", 3) == 0){
 			if(status == STATUS_OFF){ // Only change the buffered outputs 
