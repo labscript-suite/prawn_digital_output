@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
+set(PICO_SDK_PATH /Users/patrickmiller/Desktop/Github/pico-sdk)
 
 include(pico_sdk_import.cmake)
 
@@ -18,6 +19,7 @@ ${CMAKE_CURRENT_LIST_DIR}/prawn_do.pio
 )
 
 target_link_libraries(prawn_do_project
+    pico_multicore
     pico_stdlib
     hardware_dma
     hardware_pio

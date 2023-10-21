@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "pico/stdio.h"
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "pico/time.h"
 #include "hardware/dma.h"
 #include "hardware/clocks.h"
@@ -39,7 +40,8 @@ unsigned short wait = 0;
 unsigned short end = 0;
 unsigned short debug = 0;
 const char ver[6] = "1.0.0";
-
+enum core0_func {None, Start, Stop};
+enum core0_func c0f = None;
 
 /*
   Start pio state machine
@@ -114,42 +116,9 @@ void clk_resus(void) {
 	printf("System Clock Resus'd\n");
 }
 
-int main(){
 
-	// Setup serial
-	stdio_init_all();
 
-	// Initialize clock functions
-	clocks_init();
-
-	// By default, set the system clock to 100 MHz
-	set_sys_clock_khz(100000, false);
-
-	// Allow the clock to be restarted in case of any errors
-	clocks_enable_resus(&clk_resus);
-
-	// Turn on onboard LED (to indicate device is starting)
-	gpio_init(LED_PIN);
-	gpio_set_dir(LED_PIN, GPIO_OUT);
-	gpio_put(LED_PIN, 1);
-
-	// Finish startup
-	printf("Prawn Digital Output online\n");
-	gpio_put(LED_PIN, 0);
-
-	// Set status to off
-	status = STATUS_OFF;
-
-	// Setup PIO
-	PIO pio = pio0;
-	uint sm = pio_claim_unused_sm(pio, true);
-	uint dma_chan = dma_claim_unused_channel(true);
-	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
-														   // program
-	// initialize prawn_do PIO program on chosen PIO and state machine at 
-	// required offset
-	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
-
+void core1_entry() {
 	while(1){
 		// Prompt for user command
 		// PIO runs independently, so CPU spends most of its time waiting here
@@ -169,12 +138,14 @@ int main(){
 			if(status != STATUS_OFF){ // If already stopped, don't do anything
 				// Check to see if anything is left in the FIFO, and if it is
 				// then notify the user
-				if(pio_sm_get_tx_fifo_level(pio, sm)) {
+				/*if(pio_sm_get_tx_fifo_level(pio, sm)) {
 					printf("Sequence Not Fully Completed\n");
 				} else {
 					printf("Sequence Successfully Completed\n");
-				}
-				stop_sm(pio, sm, dma_chan);
+				}*/
+				c0f = Stop;
+				multicore_fifo_push_blocking(2);
+				//stop_sm(pio, sm, dma_chan);
 				status = STATUS_OFF;
 			}
 		}
@@ -195,7 +166,9 @@ int main(){
 		// Run command: start state machine
 		else if(strncmp(serial_buf, "run", 3) == 0){
 			if(status == STATUS_OFF){ // Only start running when not running
-				start_sm(pio, sm, dma_chan, offset);
+				//start_sm(pio, sm, dma_chan, offset);
+				c0f = Start;
+				multicore_fifo_push_blocking(1);
 				status = STATUS_RUNNING;
 				end = 0;
 			}
@@ -459,6 +432,62 @@ int main(){
 		}
 		else{
 			printf("Invalid command: %s\n", serial_buf);
+		}
+	}
+}
+int main(){
+
+	
+	// Setup serial
+	stdio_init_all();
+
+	// Initialize clock functions
+	clocks_init();
+
+	// By default, set the system clock to 100 MHz
+	set_sys_clock_khz(100000, false);
+
+	// Allow the clock to be restarted in case of any errors
+	clocks_enable_resus(&clk_resus);
+
+	// Turn on onboard LED (to indicate device is starting)
+	gpio_init(LED_PIN);
+	gpio_set_dir(LED_PIN, GPIO_OUT);
+	gpio_put(LED_PIN, 1);
+
+	// Finish startup
+	printf("Prawn Digital Output online\n");
+	gpio_put(LED_PIN, 0);
+
+
+
+	// Set status to off
+	status = STATUS_OFF;
+
+	
+
+	// Setup PIO
+	PIO pio = pio0;
+	uint sm = pio_claim_unused_sm(pio, true);
+	uint dma_chan = dma_claim_unused_channel(true);
+	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
+														   // program
+	// initialize prawn_do PIO program on chosen PIO and state machine at 
+	// required offset
+	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
+
+	multicore_launch_core1(core1_entry);
+
+	while(1){
+		int num = multicore_fifo_pop_blocking();
+		if (num == 1){
+			start_sm(pio, sm, dma_chan, offset);
+			num = 0;
+			c0f = None;
+		} else if (num == 2){
+			stop_sm(pio, sm, dma_chan);
+			num = 0;
+			c0f = None;
 		}
 	}
 }
