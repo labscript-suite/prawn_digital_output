@@ -18,6 +18,11 @@
 #include "serial.h"
 
 #define LED_PIN 25
+// output pins to use, much match pio
+#define OUTPUT_PIN_BASE 0
+#define OUTPUT_WIDTH 16
+// mask which bits we are using
+uint32_t mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
 
 #define MAX_DO_CMDS 60000
 uint32_t do_cmds[MAX_DO_CMDS];
@@ -40,6 +45,13 @@ unsigned short wait = 0;
 unsigned short end = 0;
 unsigned short debug = 0;
 const char ver[6] = "1.0.0";
+
+
+void configure_gpio()
+{
+	gpio_init_mask(mask);
+	gpio_set_dir_out_masked(mask);
+}
 
 /*
   Start pio state machine
@@ -237,6 +249,34 @@ int main(){
 			}
 			else{
 				printf("Unable to (restart) run while running, please abort (abt) first\n");
+			}
+		}
+		// Manual update of outputs
+		else if(strncmp(serial_buf, "man", 3) == 0){
+			if(status != STATUS_OFF){
+				printf("Can manually toggle outputs only if status == 0\n");
+			}
+			else{ // Only allow when not running
+				unsigned int manual_state;
+				int parsed = sscanf(serial_buf, "%*s %x", &manual_state);
+				if(parsed != 1){
+					printf("invalid request\n");
+				}
+				else{
+					configure_gpio();
+					gpio_put_masked(mask, manual_state);
+				}
+			}
+		}
+		// Get current output state
+		else if(strncmp(serial_buf, "gto", 3) == 0){
+			if(status != STATUS_OFF){
+				printf("Can only read output state if status == 0\n");
+			}
+			else{
+				unsigned int all_state = gpio_get_all();
+				unsigned int manual_state = (mask & all_state) >> OUTPUT_PIN_BASE;
+				printf("%x\n", manual_state);
 			}
 		}
 		// Add command: read in hexadecimal integers separated by newlines, 
