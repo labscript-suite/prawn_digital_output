@@ -11,11 +11,11 @@
 ;out X, 32
 
 start:
-;wait 1 gpio TRIGGER_PIN
-;out X, 32 ; check first value for software or hardware start
-;jmp X-- new_output ; if 0, software start sequence
+	;wait 1 gpio TRIGGER_PIN
+	out X, 32 ; check first value for software or hardware start
+	jmp !X new_output ; if 0, software start sequence
 
-;wait 1 gpio TRIGGER_PIN ; else hardware start sequence
+	wait 1 gpio TRIGGER_PIN ; else hardware start sequence
 ; Main Execution Loop:
 .wrap_target
 new_output:

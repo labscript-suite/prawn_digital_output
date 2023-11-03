@@ -85,7 +85,7 @@ void configure_gpio()
   of the Raspberry Pi Pico C/C++ SDK manual (except for output, rather than 
   input).
  */
-void start_sm(PIO pio, uint sm, uint dma_chan, uint offset){
+void start_sm(PIO pio, uint sm, uint dma_chan, uint offset, uint hwstart){
 	pio_sm_set_enabled(pio, sm, false);
 
 	// Clearing the FIFOs and restarting the state machine to prevent old
@@ -93,7 +93,7 @@ void start_sm(PIO pio, uint sm, uint dma_chan, uint offset){
 	pio_sm_clear_fifos(pio, sm);
 	pio_sm_restart(pio, sm);
 	// send initial wait command (preceeds DMA transfer)
-	//pio_sm_put_blocking(pio, sm, hwstart);
+	pio_sm_put_blocking(pio, sm, hwstart);
 	// Explicitly jump to reset program to the start
 	pio_sm_exec(pio, sm, pio_encode_jmp(offset));
 
@@ -195,9 +195,13 @@ void core1_entry() {
 		if(debug){
 			printf("hwstart: %d\n", hwstart);
 		}
-		start_sm(pio, sm, dma_chan, offset);
+		start_sm(pio, sm, dma_chan, offset, hwstart);
 		set_status(RUNNING);
 
+		// can save IRQ PIO instruction by using the following check instead
+		//while ((dma_channel_is_busy(dma_chan) // checks if dma finished
+		//        || pio_sm_is_tx_fifo_empty(pio, sm)) // ensure fifo is empty once dma finishes
+		//	     && get_status() != ABORT_REQUESTED) // breaks if Abort requested
 		while (!pio_interrupt_get(pio, sm) // breaks if PIO program reaches end
 			   && get_status() != ABORT_REQUESTED // breaks if Abort requested
 			   ){
@@ -205,7 +209,9 @@ void core1_entry() {
 			// exits if program signals IRQ (at end) or abort requested
 			continue;
 		}
-		
+		// ensure interrupt is cleared
+		pio_interrupt_clear(pio, sm);
+
 		if(debug){
 			printf("Tight execution loop ended\n");
 			uint8_t pc = pio_sm_get_pc(pio, sm);
