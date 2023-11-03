@@ -6,12 +6,16 @@
 .define public OUTPUT_WIDTH 16 ; number of pins to output from
 
 ; Immediately output the first entry so the outputs could be manually triggered
-out pins, 32
+;out pins, 32
 ; pop off dummy reps value from OSR
-out X, 32
+;out X, 32
 
 start:
-wait 1 gpio TRIGGER_PIN
+;wait 1 gpio TRIGGER_PIN
+;out X, 32 ; check first value for software or hardware start
+;jmp X-- new_output ; if 0, software start sequence
+
+;wait 1 gpio TRIGGER_PIN ; else hardware start sequence
 ; Main Execution Loop:
 .wrap_target
 new_output:
@@ -21,21 +25,21 @@ new_output:
 	; Latest fifo entry is autopulled into the OSR
 	out X, 32 ; store the number of repetitions in the X scratch register 
 
-	jmp !X end ; If the number of repetitions inputted is zero or if the OSR
-			   ; is empty, this will jump out to then determine if there is
-			   ; an indefinite wait or a full stop
+	jmp !X wait_end ; If the number of repetitions inputted is zero or if the OSR
+			        ; is empty, this will jump out to then determine if there is
+			        ; an indefinite wait or a full stop
 executing_pulse:
 	jmp X-- executing_pulse ; Decrementing the X value and looping back
 	; Automatically loop back to the wrap_target to continue execution
 .wrap
 ; The program reaches this point if the number of repetitions is equal to zero 
 ; or if the OSR is empty in the main execution loop
-end:
+wait_end:
 	out Y, 32 ; Store the next OSR entry into the Y scratch register
 
 	out X, 32 ; Store the number of reps in the X scratch register
 
-	jmp !X end_loop ; If reps equals zero, then jump to end, otherwise indefinite wait
+	jmp !X end ; If reps equals zero, then jump to end, otherwise indefinite wait
 ; This section of the code is used for waits that can only be exited by a 
 ; hardware trigger
 indefinite_wait:
@@ -52,6 +56,9 @@ end_indefinite_wait_loop:
 	; Jump to the top and continue executing commands
 	jmp new_output
 
+; send isr=0 data to rx fifo to signal program end
+end:
+	irq wait 0 rel
 ; The purpose of this section is to continuously loop to prevent wrapping
 end_loop:
 	jmp end_loop ; Continuously loop
@@ -98,6 +105,15 @@ pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div,
 	// another entry is pulled from the fifo (the fifo is then refilled via dma)
 	sm_config_set_out_shift(&config, true, true, 32);
 
+	// Clear IRQ flag before starting, and make sure flag doesn't actually
+    // assert a system-level interrupt (we're using it as a status flag)
+    pio_set_irq0_source_enabled(pio,
+		                        (enum pio_interrupt_source) ((uint) pis_interrupt0 + state_machine),
+								false);
+	pio_set_irq1_source_enabled(pio,
+		                        (enum pio_interrupt_source) ((uint) pis_interrupt0 + state_machine),
+								false);
+    pio_interrupt_clear(pio, state_machine);
 
 	// Complete initialization of state machine.
 	pio_sm_init(pio, state_machine, offset, &config);

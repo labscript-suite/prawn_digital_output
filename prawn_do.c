@@ -22,7 +22,7 @@
 #define OUTPUT_PIN_BASE 0
 #define OUTPUT_WIDTH 16
 // mask which bits we are using
-uint32_t mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
+uint32_t output_mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
 
 #define MAX_DO_CMDS 60000
 uint32_t do_cmds[MAX_DO_CMDS];
@@ -32,25 +32,45 @@ uint32_t do_cmd_count = 0;
 #define SERIAL_BUFFER_SIZE 256
 char serial_buf[SERIAL_BUFFER_SIZE];
 
-#define STATUS_OFF 0
-#define STATUS_STARTING 1
-#define STATUS_RUNNING 2
-#define STATUS_ABORTING 3
+// STATUS flag
+int status;
+#define STOPPED 0
+#define TRANSITION_TO_RUNNING 1
+#define RUNNING 2
+#define ABORT_REQUESTED 3
+#define ABORTING 4
+#define ABORTED 5
+#define TRANSITION_TO_STOP 6
 
 #define INTERNAL 0
 #define EXTERNAL 1
-int status;
 int clk_status = INTERNAL;
-unsigned short wait = 0;
-unsigned short end = 0;
 unsigned short debug = 0;
 const char ver[6] = "1.0.0";
 
+// Mutex for status
+static mutex_t status_mutex;
+
+// Thread safe functions for getting/setting status
+int get_status()
+{
+	mutex_enter_blocking(&status_mutex);
+	int status_copy = status;
+	mutex_exit(&status_mutex);
+	return status_copy;
+}
+
+void set_status(int new_status)
+{
+	mutex_enter_blocking(&status_mutex);
+	status = new_status;
+	mutex_exit(&status_mutex);
+}
 
 void configure_gpio()
 {
-	gpio_init_mask(mask);
-	gpio_set_dir_out_masked(mask);
+	gpio_init_mask(output_mask);
+	gpio_set_dir_out_masked(output_mask);
 }
 
 /*
@@ -72,8 +92,9 @@ void start_sm(PIO pio, uint sm, uint dma_chan, uint offset){
 	// instructions from persisting into future runs
 	pio_sm_clear_fifos(pio, sm);
 	pio_sm_restart(pio, sm);
-	// Explicitly jump to the beginning of the program to avoid hanging due 
-	// to missed triggers.
+	// send initial wait command (preceeds DMA transfer)
+	//pio_sm_put_blocking(pio, sm, hwstart);
+	// Explicitly jump to reset program to the start
 	pio_sm_exec(pio, sm, pio_encode_jmp(offset));
 
 	// Create dma configuration object
@@ -89,11 +110,11 @@ void start_sm(PIO pio, uint sm, uint dma_chan, uint offset){
 						  &pio->txf[sm], // write address is fifo for this pio 
 										 // and state machine
 						  do_cmds, // read address is do_cmds
-						  do_cmd_count - 1, // read a total of do_cmd_count entries
+						  do_cmd_count, // read a total of do_cmd_count entries
 						  true); // trigger (start) immediately
 
 	// Actually start state machine
-	pio_sm_set_enabled(pio, sm, true);	
+	pio_sm_set_enabled(pio, sm, true);
 }
 /*
   Stop pio state machine
@@ -105,6 +126,30 @@ void stop_sm(PIO pio, uint sm, uint dma_chan){
 	dma_channel_abort(dma_chan);
 	pio_sm_set_enabled(pio, sm, false);
 	pio_sm_clear_fifos(pio, sm);
+}
+
+/* Measure system frequencies
+From https://github.com/raspberrypi/pico-examples under BSD-3-Clause License
+*/
+void measure_freqs(void)
+{
+    uint f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
+    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
+    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
+    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+
+    printf("pll_sys = %dkHz\n", f_pll_sys);
+    printf("pll_usb = %dkHz\n", f_pll_usb);
+    printf("rosc = %dkHz\n", f_rosc);
+    printf("clk_sys = %dkHz\n", f_clk_sys);
+    printf("clk_peri = %dkHz\n", f_clk_peri);
+    printf("clk_usb = %dkHz\n", f_clk_usb);
+    printf("clk_adc = %dkHz\n", f_clk_adc);
+    printf("clk_rtc = %dkHz\n", f_clk_rtc);
 }
 
 /* Resusitation function that restarts the clock internally if there are any 
@@ -139,22 +184,60 @@ void core1_entry() {
 	// required offset
 	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
 
+	// signal core1 ready for commands
 	multicore_fifo_push_blocking(0);
 
 	while(1){
-		uint32_t stop_or_start = multicore_fifo_pop_blocking();
+		// wait for message from main core
+		uint32_t hwstart = multicore_fifo_pop_blocking();
 
-		if (stop_or_start == 0) {
-			stop_sm(pio, sm, dma_chan);
-		} else if (stop_or_start == 1) {
-			start_sm(pio, sm, dma_chan, offset);
+		set_status(TRANSITION_TO_RUNNING);
+		if(debug){
+			printf("hwstart: %d\n", hwstart);
+		}
+		start_sm(pio, sm, dma_chan, offset);
+		set_status(RUNNING);
+
+		while (!pio_interrupt_get(pio, sm) // breaks if PIO program reaches end
+			   && get_status() != ABORT_REQUESTED // breaks if Abort requested
+			   ){
+			// tight loop checking for run completion
+			// exits if program signals IRQ (at end) or abort requested
+			continue;
+		}
+		
+		if(debug){
+			printf("Tight execution loop ended\n");
+			uint8_t pc = pio_sm_get_pc(pio, sm);
+			printf("Program ended at instr %d\n", pc-offset);
 		}
 
-		stop_or_start = 0;
+		if(get_status() == ABORT_REQUESTED){
+			set_status(ABORTING);
+			stop_sm(pio, sm, dma_chan);
+			set_status(ABORTED);
+			if(debug){
+				printf("Aborted execution\n");
+			}
+		}
+		else{
+			set_status(TRANSITION_TO_STOP);
+			stop_sm(pio, sm, dma_chan);
+			set_status(STOPPED);
+			if(debug){
+				printf("Execution stopped\n");
+			}
+		}
+		if(debug){
+			printf("Core1 loop ended\n");
+		}
+
 	}
 }
 int main(){
 
+	// initialize status mutex
+	mutex_init(&status_mutex);
 	
 	// Setup serial
 	stdio_init_all();
@@ -181,28 +264,18 @@ int main(){
     multicore_fifo_pop_blocking();
 
 	// Set status to off
-	status = STATUS_OFF;
+	set_status(STOPPED);
 
-	
-
-	/*// Setup PIO
-	PIO pio = pio0;
-	uint sm = pio_claim_unused_sm(pio, true);
-	uint dma_chan = dma_claim_unused_channel(true);
-	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
-														   // program
-	// initialize prawn_do PIO program on chosen PIO and state machine at 
-	// required offset
-	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
-	*/
 
 	while(1){
+		
 		// Prompt for user command
 		// PIO runs independently, so CPU spends most of its time waiting here
 		printf("> ");
 		gpio_put(LED_PIN, 1); // turn on LED while waiting for user
 		unsigned int buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 		gpio_put(LED_PIN, 0);
+		int local_status = get_status();
 
 		// Check for command validity, all are at least three characters long
 		if(buf_len < 3){
@@ -210,239 +283,218 @@ int main(){
 			continue;
 		}
 
-		// Abort command: stop run by stopping state machine
-		if(strncmp(serial_buf, "abt", 3) == 0){
-			if(status != STATUS_OFF){ // If already stopped, don't do anything
-				// Check to see if anything is left in the FIFO, and if it is
-				// then notify the user
-				/*if(pio_sm_get_tx_fifo_level(pio, sm)) {
-					printf("Sequence Not Fully Completed\n");
-				} else {
-					printf("Sequence Successfully Completed\n");
-				}*/
-				multicore_fifo_push_blocking(0);
-				//stop_sm(pio, sm, dma_chan);
-				status = STATUS_OFF;
-			}
+		// // These commands are allowed during buffered execution
+		if(strncmp(serial_buf, "ver", 3) == 0) {
+			printf("Version: %s\n", ver);
 		}
 		// Status command: return running status
-		if(strncmp(serial_buf, "sts", 3) == 0){
-			printf("%d\n", status);
+		else if(strncmp(serial_buf, "sts", 3) == 0){
+			printf("run-status:%d clock-status:%d\n", local_status, clk_status);
 		}
+		// Enable debug mode
+		else if (strncmp(serial_buf, "deb", 3) == 0) {
+			debug = 1;
+		}
+		// Disable debug mode
+		else if (strncmp(serial_buf, "ndb", 3) == 0) {
+			debug = 0;
+		}
+		// Abort command: stop run by stopping state machine
+		else if(strncmp(serial_buf, "abt", 3) == 0){
+			if(local_status == RUNNING || local_status == TRANSITION_TO_RUNNING){
+				set_status(ABORT_REQUESTED);
+			}
+			else {
+				printf("Can only abort when status is 1 or 2\n");
+			}
+		}
+
+		// // These commands can only happen in manual mode
+		else if (local_status != ABORTED && local_status != STOPPED){
+			printf("Cannot execute command %s during buffered execution.", serial_buf);
+		}
+		
 		// Clear command: empty the buffered outputs
 		else if(strncmp(serial_buf, "cls", 3) == 0){
-			if(status == STATUS_OFF){ // Only change the buffered outputs 
-									  // when not running
-				do_cmd_count = 0;
-			}
-			else{
-				printf("Unable to clear while running, please abort (abt) first\n");
-			}
+			do_cmd_count = 0;
 		}
 		// Run command: start state machine
 		else if(strncmp(serial_buf, "run", 3) == 0){
-			if(status == STATUS_OFF){ // Only start running when not running
-				//start_sm(pio, sm, dma_chan, offset);
-				multicore_fifo_push_blocking(1);
-				status = STATUS_RUNNING;
-				end = 0;
-			}
-			else{
-				printf("Unable to (restart) run while running, please abort (abt) first\n");
-			}
+			multicore_fifo_push_blocking(1);
+		}
+		// Software start: start state machine without waiting for trigger
+		else if(strncmp(serial_buf, "swr", 3) == 0){
+			multicore_fifo_push_blocking(0);
 		}
 		// Manual update of outputs
 		else if(strncmp(serial_buf, "man", 3) == 0){
-			if(status != STATUS_OFF){
-				printf("Can manually toggle outputs only if status == 0\n");
+			unsigned int manual_state;
+			int parsed = sscanf(serial_buf, "%*s %x", &manual_state);
+			if(parsed != 1){
+				printf("invalid request\n");
 			}
-			else{ // Only allow when not running
-				unsigned int manual_state;
-				int parsed = sscanf(serial_buf, "%*s %x", &manual_state);
-				if(parsed != 1){
-					printf("invalid request\n");
-				}
-				else{
-					configure_gpio();
-					gpio_put_masked(mask, manual_state);
-				}
+			else{
+				configure_gpio();
+				gpio_put_masked(output_mask, manual_state);
 			}
 		}
 		// Get current output state
 		else if(strncmp(serial_buf, "gto", 3) == 0){
-			if(status != STATUS_OFF){
-				printf("Can only read output state if status == 0\n");
-			}
-			else{
-				unsigned int all_state = gpio_get_all();
-				unsigned int manual_state = (mask & all_state) >> OUTPUT_PIN_BASE;
-				printf("%x\n", manual_state);
-			}
+			unsigned int all_state = gpio_get_all();
+			unsigned int manual_state = (output_mask & all_state) >> OUTPUT_PIN_BASE;
+			printf("%x\n", manual_state);
 		}
 		// Add command: read in hexadecimal integers separated by newlines, 
 		// append to command array
 		else if(strncmp(serial_buf, "add", 3) == 0){
 			
-			if(status == STATUS_OFF){ // Only add output states when not running
-				while(do_cmd_count < MAX_DO_CMDS-3){
-					uint32_t output;
-					uint32_t reps;
-					unsigned short num_inputs = 0;
+			while(do_cmd_count < MAX_DO_CMDS-3){
+				uint32_t output;
+				uint32_t reps;
+				unsigned short num_inputs = 0;
 
-					do {
-					// Read in the command provided by the user
-					// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
-					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
+				do {
+				// Read in the command provided by the user
+				// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
+				buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
-					// Check if the user inputted "end", and if so, exit add mode
-					if(buf_len >= 3){
-						if(strncmp(serial_buf, "end", 3) == 0){
-							break;
-						}
-					}
-
-					// Read the input provided in the serial buffer into the 
-					// output, reps, and wait_num variables. Also storing the return
-					// value of sscanf (number of variables successfully read in)
-					// to determine if the user wants to program a stop/wait
-					num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
-
-					} while (num_inputs < 2);
-
+				// Check if the user inputted "end", and if so, exit add mode
+				if(buf_len >= 3){
 					if(strncmp(serial_buf, "end", 3) == 0){
 						break;
 					}
-
-					//DEBUG MODE:
-					// Printing to the user what the program received as input
-					// for the output, reps, and optionally wait if the user inputted
-					// that
-					if (debug) {
-						printf("Output: %x\n", output);
-						printf("Number of Reps: %d\n", reps);
-
-						if (reps == 0){
-							printf("Wait\n");
-						}
-					}
-
-
-					// Reading in the 16-bit word to output to the pins
-					do_cmds[do_cmd_count] = output;
-					do_cmd_count++;
-
-					do_cmds[do_cmd_count] = reps;
-
-					// If reps is not zero, this adjusts them from the number
-					// of 10ns reps to reps adding onto the base 50 ns pulse
-					// width
-					if (do_cmds[do_cmd_count] != 0) {
-						do_cmds[do_cmd_count] -= 4;
-					}
-					do_cmd_count++;
-
-					
 				}
-				if(do_cmd_count == MAX_DO_CMDS-1){
-					printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
+
+				// Read the input provided in the serial buffer into the 
+				// output, reps, and wait_num variables. Also storing the return
+				// value of sscanf (number of variables successfully read in)
+				// to determine if the user wants to program a stop/wait
+				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
+
+				} while (num_inputs < 2);
+
+				if(strncmp(serial_buf, "end", 3) == 0){
+					break;
 				}
+
+				//DEBUG MODE:
+				// Printing to the user what the program received as input
+				// for the output, reps, and optionally wait if the user inputted
+				// that
+				if (debug) {
+					printf("Output: %x\n", output);
+					printf("Number of Reps: %d\n", reps);
+
+					if (reps == 0){
+						printf("Wait\n");
+					}
+				}
+
+				// confirm output is valid
+				if(output & ~output_mask){
+					printf("Invalid output specification %x\n", output);
+				}
+
+				// Reading in the 16-bit word to output to the pins
+				do_cmds[do_cmd_count] = output;
+				do_cmd_count++;
+
+				do_cmds[do_cmd_count] = reps;
+
+				// If reps is not zero, this adjusts them from the number
+				// of 10ns reps to reps adding onto the base 50 ns pulse
+				// width
+				if (do_cmds[do_cmd_count] != 0) {
+					do_cmds[do_cmd_count] -= 4;
+				}
+				do_cmd_count++;
+
+				
 			}
-			else{
-				printf("Unable to add while running, please abort (abt) first\n");
+			if(do_cmd_count == MAX_DO_CMDS-1){
+				printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
 			}
 		}
 		// Add multiple command
 		else if(strncmp(serial_buf, "adm", 3) == 0){
-			if(status == STATUS_OFF){ // Only add output states when not running
-				while(do_cmd_count < MAX_DO_CMDS-3){
-					unsigned int num_inputs = 0;
-					unsigned int num_pulses = 0;
-					uint32_t output;
-					uint32_t reps;
-					uint32_t waits;
+
+			while(do_cmd_count < MAX_DO_CMDS-3){
+				unsigned int num_inputs = 0;
+				unsigned int num_pulses = 0;
+				uint32_t output;
+				uint32_t reps;
+				uint32_t waits;
 
 
-					do {
-					//Reading in the user input from the serial communication
-					buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
+				do {
+				//Reading in the user input from the serial communication
+				buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
-					// Check if the user inputted "end", and if so, exit add mode
-					if(buf_len >= 3){
-						if(strncmp(serial_buf, "end", 3) == 0){
-							break;
-						}
-					}
-
-					// Storing the inputted numbers into the output, reps, num
-					// pulses and waits variables, and stores the return value
-					// of sscanf (the number of variables successfully read)
-					// to determine if the user specified wait length or not 
-					num_inputs = sscanf(serial_buf, "%x %x %x %d", &output, &reps, &num_pulses, &waits);
-
-					} while (num_inputs < 3);
-
+				// Check if the user inputted "end", and if so, exit add mode
+				if(buf_len >= 3){
 					if(strncmp(serial_buf, "end", 3) == 0){
 						break;
 					}
-					// DEBUG MODE:
-					// Printing out what was stored from the user input, 
-					// specifically printing the output, number of reps,
-					// and number of pulses 
-					if (debug) {
-						printf("Output: %x\n", output);
-						printf("Number of Reps (Decimal): %d\n", reps);
-						printf("Number of Pulses (Decimal): %d\n", num_pulses);
-
-						if (num_inputs > 3) {
-							printf("Wait Length (Decimal): %d\n", waits);
-						}
-					}
-
-					// Removing the appended zero to not take up unecessary
-					// space (unless the prior command was a wait)
-					if(!wait && do_cmd_count > 0) {
-						do_cmd_count--;
-					} else {
-						wait = 0;
-					}
-
-					// Adjusting the number of reps to match the 40ns delay
-					reps -= 4;
-
-					// If the user specified how long the wait is, adjust that
-					// for the initial 40ns delay, otherwise copy over the 
-					// number of reps to the number of waits
-					if (num_inputs < 4) {
-						waits = reps;
-					} else {
-						waits -= 4;
-					}
-					
-					// Looping through each pulse, adding it into memory and
-					// adding the waits between each pulse
-					while(num_pulses > 0) {
-						do_cmds[do_cmd_count] = output;
-						do_cmd_count++;
-
-						do_cmds[do_cmd_count] = reps;
-						do_cmd_count++;
-
-						do_cmds[do_cmd_count] = 0;
-						do_cmd_count++;
-
-						do_cmds[do_cmd_count] = waits;
-						do_cmd_count++;
-
-						num_pulses--;
-					}
-					
 				}
-				if(do_cmd_count == MAX_DO_CMDS-1){
-					printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
+
+				// Storing the inputted numbers into the output, reps, num
+				// pulses and waits variables, and stores the return value
+				// of sscanf (the number of variables successfully read)
+				// to determine if the user specified wait length or not 
+				num_inputs = sscanf(serial_buf, "%x %x %x %d", &output, &reps, &num_pulses, &waits);
+
+				} while (num_inputs < 3);
+
+				if(strncmp(serial_buf, "end", 3) == 0){
+					break;
 				}
+				// DEBUG MODE:
+				// Printing out what was stored from the user input, 
+				// specifically printing the output, number of reps,
+				// and number of pulses 
+				if (debug) {
+					printf("Output: %x\n", output);
+					printf("Number of Reps (Decimal): %d\n", reps);
+					printf("Number of Pulses (Decimal): %d\n", num_pulses);
+
+					if (num_inputs > 3) {
+						printf("Wait Length (Decimal): %d\n", waits);
+					}
+				}
+
+				// Adjusting the number of reps to match the 40ns delay
+				reps -= 4;
+
+				// If the user specified how long the wait is, adjust that
+				// for the initial 40ns delay, otherwise copy over the 
+				// number of reps to the number of waits
+				if (num_inputs < 4) {
+					waits = reps;
+				} else {
+					waits -= 4;
+				}
+				
+				// Looping through each pulse, adding it into memory and
+				// adding the waits between each pulse
+				while(num_pulses > 0) {
+					do_cmds[do_cmd_count] = output;
+					do_cmd_count++;
+
+					do_cmds[do_cmd_count] = reps;
+					do_cmd_count++;
+
+					do_cmds[do_cmd_count] = 0;
+					do_cmd_count++;
+
+					do_cmds[do_cmd_count] = waits;
+					do_cmd_count++;
+
+					num_pulses--;
+				}
+				
 			}
-			else{
-				printf("Unable to add while running, please abort (abt) first\n");
+			if(do_cmd_count == MAX_DO_CMDS-1){
+				printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
 			}
 		}
 		// Dump command: print the currently loaded buffered outputs
@@ -464,7 +516,8 @@ int main(){
 				}
 				
 			}
-		} else if (strncmp(serial_buf, "clk", 3) == 0) {
+		}
+		else if (strncmp(serial_buf, "clk", 3) == 0){
 			if (strncmp(serial_buf + 4, "ext", 3) == 0) {
 				// Sync the clock with the input from gpio pin 20
 				clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
@@ -491,10 +544,11 @@ int main(){
 					clock_configure_gpin(clk_sys, 20, clock_freq, clock_freq);
 				}
 			}
+		}
 		// Editing the current command with the instruction provided by the
 		// user 
 		// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
-		} else if (strncmp(serial_buf, "edt", 3) == 0) {
+		else if (strncmp(serial_buf, "edt", 3) == 0) {
 			if (do_cmd_count > 0) {
 				uint32_t output;
 				uint32_t reps;
@@ -515,23 +569,20 @@ int main(){
 				do_cmds[do_cmd_count - 1] = reps;
 
 			}
+		
+		}
 		// Printing out the latest digital output command added to the current 
 		// running program
-		} else if (strncmp(serial_buf, "cur", 3) == 0) {
+		else if (strncmp(serial_buf, "cur", 3) == 0) {
 				printf("Output: %x\n", do_cmds[do_cmd_count - 2]);
 				printf("Reps: %d\n", do_cmds[do_cmd_count - 1] + 4);
 				if(do_cmds[do_cmd_count - 1] == 0){
 					printf("Wait\n");
 				}
-		
-		} else if (strncmp(serial_buf, "deb", 3) == 0) {
-			// Turning debug mode on
-			debug = 1;
-		} else if (strncmp(serial_buf, "ndb", 3) == 0) {
-			// Turning debug mode off
-			debug = 0;
-		} else if(strncmp(serial_buf, "ver", 3) == 0) {
-			printf("Version: %s\n", ver);
+		}
+		// Measure system frequencies
+		else if(strncmp(serial_buf, "frq", 3) == 0) {
+			measure_freqs();
 		}
 		else{
 			printf("Invalid command: %s\n", serial_buf);
