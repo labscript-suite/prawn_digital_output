@@ -49,9 +49,7 @@ Commands are separated by a newline character: `'\n'`
 * `gto` - Get the current output state. Returns states of pins 0-15 as a single hex number.
 * `dmp` - Print the current sequence of programmed outputs.
 * `cls` - Clear the current sequence of programmed outputs.
-* `clk ext` - Sets the system clock to the clock input at GPIO pin 20.
-* `clk int` - Sets the system clock to the internal system clock.
-* `clk set <clock frequency in decimal>` - Sets the clock to the specified clock frequency, in Hz.
+* `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 133 MHz. Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
 * `frq` - Measure and print system frequencies.
 * `cur` - Prints the last command entered.
 * `edt` - Allows the user to enter a new command to replace the last command entered.

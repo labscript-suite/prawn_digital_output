@@ -156,7 +156,7 @@ void measure_freqs(void)
    issues with syncing the external clock or invalid changes to the clock
 */
 void clk_resus(void) {
-	// Restarting the internal clock at 100 MHz
+	// Restarting the internal clock at 100 MHz (set in kHz)
 	set_sys_clock_khz(100000, false);
 
 	// Remove the clock syncing functionality
@@ -450,33 +450,31 @@ int main(){
 			}
 		}
 		else if (strncmp(serial_buf, "clk", 3) == 0){
-			if (strncmp(serial_buf + 4, "ext", 3) == 0) {
-				// Sync the clock with the input from gpio pin 20
-				clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
-				clk_status = EXTERNAL;
-				printf("ok\n");
-			} else if (strncmp(serial_buf + 4, "int", 3) == 0) {
-				// Set the internal clock back to 100 MHz
-				set_sys_clock_khz(100000, false);
-
-				// Remove the clock sync from pin 20
-				gpio_set_function(20, GPIO_FUNC_NULL);
-
-				clk_status = INTERNAL;
-				printf("ok\n");
-			} else if (strncmp(serial_buf + 4, "set", 3) == 0) {
-				unsigned int clock_freq;
-				// Read in the clock frequency requested
-				sscanf(serial_buf + 8, "%d", &clock_freq);
-				if (clk_status == INTERNAL) {
-					// If the clock is internal, set that clock to the requested
-					// frequency
-					set_sys_clock_khz(clock_freq / 1000, false);
+			unsigned int src; // 0 = internal, 1 = external (GPIO pin 20)
+			unsigned int freq; // in Hz (up to 133 MHz)
+			int parsed = sscanf(serial_buf, "%*s %u %u", &src, &freq);
+			// validation checks of the inputs
+			if (parsed < 2) {
+				printf("invalid clock request\n");
+				continue;
+			} else if (src > 2) {
+				printf("invalid clock source request\n");
+				continue;
+			} else if (freq > 133000000) {
+				printf("invalid clock frequency request\n");
+				continue;
+			}
+			// set new clock source and frequency
+			if (src == 0) { // internal
+				if (set_sys_clock_khz(freq / 1000, false)) {
+					printf("ok\n");
+					clk_status = INTERNAL;
 				} else {
-					// If the clock is external, set the expected and requested
-					// frequency to the inputted clock frequency
-					clock_configure_gpin(clk_sys, 20, clock_freq, clock_freq);
+					printf("Failure. Cannot exactly achieve that clock frequency");
 				}
+			} else { // external
+				clock_configure_gpin(clk_sys, 20, freq, freq);
+				clk_status = EXTERNAL;
 				printf("ok\n");
 			}
 		}
