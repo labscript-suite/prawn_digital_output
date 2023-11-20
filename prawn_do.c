@@ -277,7 +277,6 @@ int main(){
 		
 		// Prompt for user command
 		// PIO runs independently, so CPU spends most of its time waiting here
-		printf("> ");
 		gpio_put(LED_PIN, 1); // turn on LED while waiting for user
 		unsigned int buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 		gpio_put(LED_PIN, 0);
@@ -300,15 +299,18 @@ int main(){
 		// Enable debug mode
 		else if (strncmp(serial_buf, "deb", 3) == 0) {
 			debug = 1;
+			printf("ok\n");
 		}
 		// Disable debug mode
 		else if (strncmp(serial_buf, "ndb", 3) == 0) {
 			debug = 0;
+			printf("ok\n");
 		}
 		// Abort command: stop run by stopping state machine
 		else if(strncmp(serial_buf, "abt", 3) == 0){
 			if(local_status == RUNNING || local_status == TRANSITION_TO_RUNNING){
 				set_status(ABORT_REQUESTED);
+				printf("ok\n");
 			}
 			else {
 				printf("Can only abort when status is 1 or 2\n");
@@ -323,14 +325,17 @@ int main(){
 		// Clear command: empty the buffered outputs
 		else if(strncmp(serial_buf, "cls", 3) == 0){
 			do_cmd_count = 0;
+			printf("ok\n");
 		}
 		// Run command: start state machine
 		else if(strncmp(serial_buf, "run", 3) == 0){
 			multicore_fifo_push_blocking(1);
+			printf("ok\n");
 		}
 		// Software start: start state machine without waiting for trigger
 		else if(strncmp(serial_buf, "swr", 3) == 0){
 			multicore_fifo_push_blocking(0);
+			printf("ok\n");
 		}
 		// Manual update of outputs
 		else if(strncmp(serial_buf, "man", 3) == 0){
@@ -342,6 +347,7 @@ int main(){
 			else{
 				configure_gpio();
 				gpio_put_masked(output_mask, manual_state);
+				printf("ok\n");
 			}
 		}
 		// Get current output state
@@ -367,6 +373,7 @@ int main(){
 				// Check if the user inputted "end", and if so, exit add mode
 				if(buf_len >= 3){
 					if(strncmp(serial_buf, "end", 3) == 0){
+						printf("ok\n");
 						break;
 					}
 				}
@@ -380,6 +387,7 @@ int main(){
 				} while (num_inputs < 2);
 
 				if(strncmp(serial_buf, "end", 3) == 0){
+					printf("ok\n");
 					break;
 				}
 
@@ -446,6 +454,7 @@ int main(){
 				// Sync the clock with the input from gpio pin 20
 				clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
 				clk_status = EXTERNAL;
+				printf("ok\n");
 			} else if (strncmp(serial_buf + 4, "int", 3) == 0) {
 				// Set the internal clock back to 100 MHz
 				set_sys_clock_khz(100000, false);
@@ -454,6 +463,7 @@ int main(){
 				gpio_set_function(20, GPIO_FUNC_NULL);
 
 				clk_status = INTERNAL;
+				printf("ok\n");
 			} else if (strncmp(serial_buf + 4, "set", 3) == 0) {
 				unsigned int clock_freq;
 				// Read in the clock frequency requested
@@ -467,6 +477,7 @@ int main(){
 					// frequency to the inputted clock frequency
 					clock_configure_gpin(clk_sys, 20, clock_freq, clock_freq);
 				}
+				printf("ok\n");
 			}
 		}
 		// Editing the current command with the instruction provided by the
@@ -492,7 +503,10 @@ int main(){
 				do_cmds[do_cmd_count - 2] = output;
 				do_cmds[do_cmd_count - 1] = reps;
 
+			} else {
+				printf("No commands to edit\n");
 			}
+			printf("ok\n");
 		
 		}
 		// Printing out the latest digital output command added to the current 
