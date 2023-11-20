@@ -28,8 +28,6 @@ Commands are separated by a newline character: `'\n'`
   The number of clock cycles sets how long this state is held before the next instruction.
   If the number of clock cycles is 0, an additional input number is expected. If that number is 0, this indicates end of program.
   If that number is 1, this indicates and indefinate wait to with execution to be retriggered.
-* `adm` -= Same functionality as `add`, but allows for multiple repeated pulses to be added with a single command. `end` exits this mode.
-  Each line has the syntax `<output word (in hex)> <number of clock cycles (in hex)> <number of pulses (in hex)> <OPTIONAL: wait cycles in hex>` Allows for an optionally controlled wait time between pulses, otherwise by default the wait times equal the number of clock cycles. Currently does not support indefinite waits or full stops.
 * `run` - Used to start waiting for the hardware trigger to begin the programmed sequence of digital outputs.
 * `abt` - Exit the run sequence.
 * `dmp` - Print the current sequence of programmed outputs.
