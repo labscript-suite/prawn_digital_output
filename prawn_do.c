@@ -361,7 +361,7 @@ int main(){
 
 				do {
 				// Read in the command provided by the user
-				// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
+				// FORMAT: <output> <reps> <REPS = 0: Indefinite Wait>
 				buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 				// Check if the user inputted "end", and if so, exit add mode
@@ -372,7 +372,7 @@ int main(){
 				}
 
 				// Read the input provided in the serial buffer into the 
-				// output, reps, and wait_num variables. Also storing the return
+				// output, and reps variables. Also storing the return
 				// value of sscanf (number of variables successfully read in)
 				// to determine if the user wants to program a stop/wait
 				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
@@ -471,7 +471,7 @@ int main(){
 		}
 		// Editing the current command with the instruction provided by the
 		// user 
-		// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
+		// FORMAT: <output> <reps> <REPS = 0: Indefinite Wait>
 		else if (strncmp(serial_buf, "edt", 3) == 0) {
 			if (do_cmd_count > 0) {
 				uint32_t output;
@@ -483,7 +483,7 @@ int main(){
 				readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 				// Storing the input from the user into the respective output,
-				// reps, and waits variables to be stored in memory
+				// and reps variables to be stored in memory
 				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
 
 				} while (num_inputs < 2);

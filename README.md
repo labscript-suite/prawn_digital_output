@@ -23,18 +23,36 @@ The basis of the functionality for this serial interface was developed in Carter
 
 Commands are separated by a newline character: `'\n'`
 
+* `sts` - Prints the current running and clock statuses.
+  Running statuses include:
+  
+  * `STOPPED = 0`: indicates no sequence is running. This is the default state.
+  * `TRANSITION_TO_RUNNING = 1`: device is transitions to running a sequence.
+  * `RUNNING = 2`: device is running a sequence.
+  * `ABORT_REQUESTED = 3`: Abort has been requested by the user.
+  * `ABORTING = 4`: device is aborting sequence execution.
+  * `ABORTED = 5`: device aborted most recent execution.
+  * `TRANSITION_TO_STOP = 6`: device has ended sequence execution normally and as returning to stopped state.
+
+  Clock statuses are `INTERNAL=0` and `EXTERNAL=1`. Default is internal.
+
 * `add` - Enters mode for adding pulse instructions. The `end` command exits this mode.
   Each line has the syntax of `<output word (in hex)> <number of clock cycles (in hex)>`. The output word (in hex) sets the binary states of GPIO pins 0-15, aligned such that output 15 is the Most Significant Bit.
   The number of clock cycles sets how long this state is held before the next instruction.
-  If the number of clock cycles is 0, an additional input number is expected. If that number is 0, this indicates end of program.
-  If that number is 1, this indicates and indefinate wait to with execution to be retriggered.
+  If the number of clock cycles is 0, this indicates an indefinite wait and an
+  external hardware trigger on pin 16 restarts program execution.
+  If two successive commands have clock cycles of 0, this indicates the end of the program.
 * `run` - Used to start waiting for the hardware trigger to begin the programmed sequence of digital outputs.
-* `abt` - Exit the run sequence.
+* `swr` - Used to software start a programmed sequence of digital outputs (ie do not wait for a hardware trigger at program start).
+* `abt` - Abort execution of a running sequence.
+* `man` - Manually change the output pins' states. Syntax is `man <output word (in hex)>`.
+* `gto` - Get the current output state. Returns states of pins 0-15 as a single hex number.
 * `dmp` - Print the current sequence of programmed outputs.
 * `cls` - Clear the current sequence of programmed outputs.
 * `clk ext` - Sets the system clock to the clock input at GPIO pin 20.
 * `clk int` - Sets the system clock to the internal system clock.
 * `clk set <clock frequency in decimal>` - Sets the clock to the specified clock frequency, in Hz.
+* `frq` - Measure and print system frequencies.
 * `cur` - Prints the last command entered.
 * `edt` - Allows the user to enter a new command to replace the last command entered.
 * `deb` - Turns on debugging mode which adds printed output when adding instructions. By default, debugging is off.
@@ -45,7 +63,7 @@ Commands are separated by a newline character: `'\n'`
 Firmware supports the use of an external clock. This prevents any significant phase slip between a pseudoclock and this digital output controller if their clocks are phase synchronous. By default, the clock accepts a 100 MHz LVCMOS clock input.
 
 ## Example:
-Below programs sets one output high for 1 microsecond, then low while setting the next output high for 1 microsecond (64 in hex = 100 in decimal) for 6 outputs, then stopping:
+Below program sets one output high for 1 microsecond, then low while setting the next output high for 1 microsecond (64 in hex = 100 in decimal) for 6 outputs, then stopping:
 
 Commands (`\n` explicitly denotes newline/pressing enter):
 
@@ -57,7 +75,8 @@ add\n
 8 64\n
 10 64\n
 20 64\n
-0 0 0\n
+0 0\n
+0 0\n
 end\n
 ```
 
