@@ -180,9 +180,6 @@ void core1_entry() {
 	uint dma_chan = dma_claim_unused_channel(true);
 	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
 														   // program
-	// initialize prawn_do PIO program on chosen PIO and state machine at 
-	// required offset
-	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
 
 	// signal core1 ready for commands
 	multicore_fifo_push_blocking(0);
@@ -195,6 +192,10 @@ void core1_entry() {
 		if(debug){
 			printf("hwstart: %d\n", hwstart);
 		}
+		// (re)initialize prawn_do PIO program on chosen PIO and state machine at 
+		// required offset
+		pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
+		// start the state machine
 		start_sm(pio, sm, dma_chan, offset, hwstart);
 		set_status(RUNNING);
 
