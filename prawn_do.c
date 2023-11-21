@@ -373,8 +373,7 @@ int main(){
 				// Check if the user inputted "end", and if so, exit add mode
 				if(buf_len >= 3){
 					if(strncmp(serial_buf, "end", 3) == 0){
-						printf("ok\n");
-						break;
+						break; // breaks inner read loop
 					}
 				}
 
@@ -388,7 +387,7 @@ int main(){
 
 				if(strncmp(serial_buf, "end", 3) == 0){
 					printf("ok\n");
-					break;
+					break; // breaks add mode loop
 				}
 
 				//DEBUG MODE:
@@ -407,6 +406,7 @@ int main(){
 				// confirm output is valid
 				if(output & ~output_mask){
 					printf("Invalid output specification %x\n", output);
+					break;
 				}
 
 				// Reading in the 16-bit word to output to the pins
@@ -444,7 +444,7 @@ int main(){
 					printf("\tWait\n");
 				}
 				else {
-					printf("\tnumber of reps: %d\n", do_cmds[i]+4);
+					printf("\treps: %x\n", do_cmds[i]+4);
 				}
 				
 			}
