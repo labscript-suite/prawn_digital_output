@@ -22,7 +22,9 @@ All timings are given relative to the default system clock of 100 MHz.
 Before plugging in usb, hold down the bootsel button, which should pop-up a window to drag/drop the .uf2 file into, and when that .uf2 file is added, the window should disappear.
 
 ## Serial Communication
-Commands and responses are separated by a newline character: `'\n'`.
+Commands must end with a newline character: `'\n'`.
+All responses are terminated by CRLF: `'\r\n'`.
+Commands can also be terminated by CRLF for symmetry.
 
 These commands can be run at any time (ie during sequence execution).
 

@@ -320,7 +320,7 @@ int main(){
 
 		// // These commands can only happen in manual mode
 		else if (local_status != ABORTED && local_status != STOPPED){
-			printf("Cannot execute command %s during buffered execution.", serial_buf);
+			printf("Cannot execute command %s during buffered execution.\n", serial_buf);
 		}
 		
 		// Clear command: empty the buffered outputs
@@ -452,7 +452,7 @@ int main(){
 		}
 		// Program length command: print number of instructions currently in program
 		else if (strncmp(serial_buf, "len", 3) == 0){
-			printf("Number of instructions: %d", do_cmd_count/2);
+			printf("Number of instructions: %d\n", do_cmd_count/2);
 		}
 		// Clk configuration command
 		// FORMAT: clk <src:0,1> <freq:int>
@@ -477,7 +477,7 @@ int main(){
 					printf("ok\n");
 					clk_status = INTERNAL;
 				} else {
-					printf("Failure. Cannot exactly achieve that clock frequency");
+					printf("Failure. Cannot exactly achieve that clock frequency\n");
 				}
 			} else { // external
 				clock_configure_gpin(clk_sys, 20, freq, freq);
