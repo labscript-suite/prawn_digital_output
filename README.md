@@ -63,6 +63,7 @@ These commands must be run when the running status is `STOPPED`.
 * `edt` - Allows the user to enter a new command to replace the last command entered.
 
 * `dmp` - Print the current sequence of programmed outputs.
+* `len` - Print total number of instructions in the programmed sequence.
 * `cls` - Clear the current sequence of programmed outputs.
 
 * `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 133 MHz. Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.

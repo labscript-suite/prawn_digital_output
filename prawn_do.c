@@ -449,6 +449,12 @@ int main(){
 				
 			}
 		}
+		// Program length command: print number of instructions currently in program
+		else if (strncmp(serial_buf, "len", 3) == 0){
+			printf("Number of instructions: %d", do_cmd_count/2);
+		}
+		// Clk configuration command
+		// FORMAT: clk <src:0,1> <freq:int>
 		else if (strncmp(serial_buf, "clk", 3) == 0){
 			unsigned int src; // 0 = internal, 1 = external (GPIO pin 20)
 			unsigned int freq; // in Hz (up to 133 MHz)
