@@ -409,6 +409,11 @@ int main(){
 					printf("Invalid output specification %x\n", output);
 					break;
 				}
+				// confirm reps is valid
+				if(reps < 5 && reps != 0){
+					printf("Reps must be 0 or greater than 4, got %x\n", reps);
+					break;
+				}
 
 				// Reading in the 16-bit word to output to the pins
 				do_cmds[do_cmd_count] = output;
