@@ -46,7 +46,7 @@ int status;
 #define EXTERNAL 1
 int clk_status = INTERNAL;
 unsigned short debug = 0;
-const char ver[6] = "1.0.0";
+const char ver[6] = "1.1.0";
 
 // Mutex for status
 static mutex_t status_mutex;
