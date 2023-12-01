@@ -55,6 +55,8 @@ These commands must be run when the running status is `STOPPED`.
     Output word of this instruction is held until an external hardware trigger on pin 16 restarts program execution.
     * If two successive commands have clock cycles of 0, this indicates the end of the program. Output word of this instruction is ignored.
   * `end` command exits this mode.
+* `set <address (in hex)> <output word (in hex)> <number of clock cycles (in hex)>` - Sets instruction at address (0 indexed).
+* `get <address (in hex)>` - Gets instruction at address. Returns output word and number of clock cycles separated by a space, in same format as `set`.
 * `run` - Used to hardware start a programmed sequence (ie waits for external trigger before processing first instruction).
 * `swr` - Used to software start a programmed sequence (ie do not wait for a hardware trigger at sequence start).
 
@@ -62,7 +64,7 @@ These commands must be run when the running status is `STOPPED`.
 * `gto` - Get the current output state. Returns states of pins 0-15 as a single hex number.
 
 * `cur` - Prints the last command entered.
-* `edt` - Allows the user to enter a new command to replace the last command entered.
+* `edt` - Allows the user to enter a new command to replace the last command entered using `add`.
 
 * `dmp` - Print the current sequence of programmed outputs.
 * `len` - Print total number of instructions in the programmed sequence.

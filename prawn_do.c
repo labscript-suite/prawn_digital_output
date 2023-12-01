@@ -25,6 +25,8 @@
 uint32_t output_mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
 
 #define MAX_DO_CMDS 60000
+// two DO CMDS per INSTRUCTION
+#define MAX_INSTR 30000
 uint32_t do_cmds[MAX_DO_CMDS];
 uint32_t do_cmd_count = 0;
 
@@ -357,6 +359,69 @@ int main(){
 			unsigned int manual_state = (output_mask & all_state) >> OUTPUT_PIN_BASE;
 			printf("%x\n", manual_state);
 		}
+		// Set instruction by address
+		else if(strncmp(serial_buf, "set", 3) == 0){
+			uint32_t addr;
+			uint32_t do_cmd_addr;
+			uint32_t output;
+			uint32_t reps;
+			int parsed = sscanf(serial_buf, "%*s %x %x %x", &addr, &output, &reps);
+			if (parsed < 3) {
+				printf("Invalid instruction\n");
+			}
+			else if (addr >= MAX_INSTR){
+				printf("Invalid instruction address %x\n", addr);
+			}
+			// confirm output is valid
+			else if(output & ~output_mask){
+				printf("Invalid output specification %x\n", output);
+			}
+			// confirm reps is valid
+			else if(reps < 5 && reps != 0){
+				printf("Reps must be 0 or greater than 4, got %x\n", reps);
+			}
+			else {
+				do_cmd_addr = addr * 2;
+				do_cmds[do_cmd_addr] = output;
+				if(reps != 0){
+					// Adjust from the number of 10ns reps 
+					// to reps adding onto the base 50 ns pulse width
+					reps -= 4;
+				}
+				do_cmds[do_cmd_addr + 1] = reps;
+				// update do_cmd_count if we have increased it
+				if(do_cmd_addr+1 > do_cmd_count){
+					// +2 to account for zero indexing of addr
+					do_cmd_count = do_cmd_addr + 2;
+				}
+				else if(reps == 0 && addr != 0 && do_cmds[do_cmd_addr-1] == 0){
+					// reset if we just set a stop command (two reps=0 commands in a row)
+					do_cmd_count = do_cmd_addr + 2;
+				}
+				printf("ok\r\n");
+			}
+		}
+		// Get instruction at address
+		else if(strncmp(serial_buf, "get", 3) == 0){
+			uint32_t addr;
+			uint32_t output;
+			uint32_t reps;
+			int parsed = sscanf(serial_buf, "%*s %x", &addr);
+			if(parsed < 1){
+				printf("Invalid request\n");
+			}
+			else if(addr*2+1 > do_cmd_count){
+				printf("Invalid address\n");
+			}
+			else {
+				output = do_cmds[addr*2];
+				reps = do_cmds[addr*2+1];
+				if(reps != 0){
+					reps += 4;
+				}
+				printf("%x %x\n", output, reps);
+			}
+		}
 		// Add command: read in hexadecimal integers separated by newlines, 
 		// append to command array
 		else if(strncmp(serial_buf, "add", 3) == 0){
@@ -428,7 +493,6 @@ int main(){
 					do_cmds[do_cmd_count] -= 4;
 				}
 				do_cmd_count++;
-
 				
 			}
 			if(do_cmd_count == MAX_DO_CMDS-1){
@@ -457,6 +521,7 @@ int main(){
 		}
 		// Program length command: print number of instructions currently in program
 		else if (strncmp(serial_buf, "len", 3) == 0){
+			printf("Number of command lines: %d\n", do_cmd_count);
 			printf("Number of instructions: %d\n", do_cmd_count/2);
 		}
 		// Clk configuration command
