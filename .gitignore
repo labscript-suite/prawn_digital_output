@@ -1,0 +1,5 @@
+build/*
+!build/*.uf2
+.vscode
+.DS_Store
+cmake-*

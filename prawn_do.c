@@ -25,6 +25,8 @@
 uint32_t output_mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
 
 #define MAX_DO_CMDS 60000
+// two DO CMDS per INSTRUCTION
+#define MAX_INSTR 30000
 uint32_t do_cmds[MAX_DO_CMDS];
 uint32_t do_cmd_count = 0;
 
@@ -46,7 +48,7 @@ int status;
 #define EXTERNAL 1
 int clk_status = INTERNAL;
 unsigned short debug = 0;
-const char ver[6] = "1.0.0";
+const char ver[6] = "1.1.0";
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -156,7 +158,7 @@ void measure_freqs(void)
    issues with syncing the external clock or invalid changes to the clock
 */
 void clk_resus(void) {
-	// Restarting the internal clock at 100 MHz
+	// Restarting the internal clock at 100 MHz (set in kHz)
 	set_sys_clock_khz(100000, false);
 
 	// Remove the clock syncing functionality
@@ -180,9 +182,6 @@ void core1_entry() {
 	uint dma_chan = dma_claim_unused_channel(true);
 	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
 														   // program
-	// initialize prawn_do PIO program on chosen PIO and state machine at 
-	// required offset
-	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
 
 	// signal core1 ready for commands
 	multicore_fifo_push_blocking(0);
@@ -195,6 +194,10 @@ void core1_entry() {
 		if(debug){
 			printf("hwstart: %d\n", hwstart);
 		}
+		// (re)initialize prawn_do PIO program on chosen PIO and state machine at 
+		// required offset
+		pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
+		// start the state machine
 		start_sm(pio, sm, dma_chan, offset, hwstart);
 		set_status(RUNNING);
 
@@ -277,7 +280,6 @@ int main(){
 		
 		// Prompt for user command
 		// PIO runs independently, so CPU spends most of its time waiting here
-		printf("> ");
 		gpio_put(LED_PIN, 1); // turn on LED while waiting for user
 		unsigned int buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 		gpio_put(LED_PIN, 0);
@@ -300,15 +302,18 @@ int main(){
 		// Enable debug mode
 		else if (strncmp(serial_buf, "deb", 3) == 0) {
 			debug = 1;
+			printf("ok\n");
 		}
 		// Disable debug mode
 		else if (strncmp(serial_buf, "ndb", 3) == 0) {
 			debug = 0;
+			printf("ok\n");
 		}
 		// Abort command: stop run by stopping state machine
 		else if(strncmp(serial_buf, "abt", 3) == 0){
 			if(local_status == RUNNING || local_status == TRANSITION_TO_RUNNING){
 				set_status(ABORT_REQUESTED);
+				printf("ok\n");
 			}
 			else {
 				printf("Can only abort when status is 1 or 2\n");
@@ -317,20 +322,23 @@ int main(){
 
 		// // These commands can only happen in manual mode
 		else if (local_status != ABORTED && local_status != STOPPED){
-			printf("Cannot execute command %s during buffered execution.", serial_buf);
+			printf("Cannot execute command %s during buffered execution.\n", serial_buf);
 		}
 		
 		// Clear command: empty the buffered outputs
 		else if(strncmp(serial_buf, "cls", 3) == 0){
 			do_cmd_count = 0;
+			printf("ok\n");
 		}
 		// Run command: start state machine
 		else if(strncmp(serial_buf, "run", 3) == 0){
 			multicore_fifo_push_blocking(1);
+			printf("ok\n");
 		}
 		// Software start: start state machine without waiting for trigger
 		else if(strncmp(serial_buf, "swr", 3) == 0){
 			multicore_fifo_push_blocking(0);
+			printf("ok\n");
 		}
 		// Manual update of outputs
 		else if(strncmp(serial_buf, "man", 3) == 0){
@@ -342,6 +350,7 @@ int main(){
 			else{
 				configure_gpio();
 				gpio_put_masked(output_mask, manual_state);
+				printf("ok\n");
 			}
 		}
 		// Get current output state
@@ -349,6 +358,69 @@ int main(){
 			unsigned int all_state = gpio_get_all();
 			unsigned int manual_state = (output_mask & all_state) >> OUTPUT_PIN_BASE;
 			printf("%x\n", manual_state);
+		}
+		// Set instruction by address
+		else if(strncmp(serial_buf, "set", 3) == 0){
+			uint32_t addr;
+			uint32_t do_cmd_addr;
+			uint32_t output;
+			uint32_t reps;
+			int parsed = sscanf(serial_buf, "%*s %x %x %x", &addr, &output, &reps);
+			if (parsed < 3) {
+				printf("Invalid instruction\n");
+			}
+			else if (addr >= MAX_INSTR){
+				printf("Invalid instruction address %x\n", addr);
+			}
+			// confirm output is valid
+			else if(output & ~output_mask){
+				printf("Invalid output specification %x\n", output);
+			}
+			// confirm reps is valid
+			else if(reps < 5 && reps != 0){
+				printf("Reps must be 0 or greater than 4, got %x\n", reps);
+			}
+			else {
+				do_cmd_addr = addr * 2;
+				do_cmds[do_cmd_addr] = output;
+				if(reps != 0){
+					// Adjust from the number of 10ns reps 
+					// to reps adding onto the base 50 ns pulse width
+					reps -= 4;
+				}
+				do_cmds[do_cmd_addr + 1] = reps;
+				// update do_cmd_count if we have increased it
+				if(do_cmd_addr+1 > do_cmd_count){
+					// +2 to account for zero indexing of addr
+					do_cmd_count = do_cmd_addr + 2;
+				}
+				else if(reps == 0 && addr != 0 && do_cmds[do_cmd_addr-1] == 0){
+					// reset if we just set a stop command (two reps=0 commands in a row)
+					do_cmd_count = do_cmd_addr + 2;
+				}
+				printf("ok\r\n");
+			}
+		}
+		// Get instruction at address
+		else if(strncmp(serial_buf, "get", 3) == 0){
+			uint32_t addr;
+			uint32_t output;
+			uint32_t reps;
+			int parsed = sscanf(serial_buf, "%*s %x", &addr);
+			if(parsed < 1){
+				printf("Invalid request\n");
+			}
+			else if(addr*2+1 > do_cmd_count){
+				printf("Invalid address\n");
+			}
+			else {
+				output = do_cmds[addr*2];
+				reps = do_cmds[addr*2+1];
+				if(reps != 0){
+					reps += 4;
+				}
+				printf("%x %x\n", output, reps);
+			}
 		}
 		// Add command: read in hexadecimal integers separated by newlines, 
 		// append to command array
@@ -361,18 +433,18 @@ int main(){
 
 				do {
 				// Read in the command provided by the user
-				// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
+				// FORMAT: <output> <reps> <REPS = 0: Indefinite Wait>
 				buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 				// Check if the user inputted "end", and if so, exit add mode
 				if(buf_len >= 3){
 					if(strncmp(serial_buf, "end", 3) == 0){
-						break;
+						break; // breaks inner read loop
 					}
 				}
 
 				// Read the input provided in the serial buffer into the 
-				// output, reps, and wait_num variables. Also storing the return
+				// output, and reps variables. Also storing the return
 				// value of sscanf (number of variables successfully read in)
 				// to determine if the user wants to program a stop/wait
 				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
@@ -380,7 +452,8 @@ int main(){
 				} while (num_inputs < 2);
 
 				if(strncmp(serial_buf, "end", 3) == 0){
-					break;
+					printf("ok\n");
+					break; // breaks add mode loop
 				}
 
 				//DEBUG MODE:
@@ -399,6 +472,12 @@ int main(){
 				// confirm output is valid
 				if(output & ~output_mask){
 					printf("Invalid output specification %x\n", output);
+					break;
+				}
+				// confirm reps is valid
+				if(reps < 5 && reps != 0){
+					printf("Reps must be 0 or greater than 4, got %x\n", reps);
+					break;
 				}
 
 				// Reading in the 16-bit word to output to the pins
@@ -414,89 +493,6 @@ int main(){
 					do_cmds[do_cmd_count] -= 4;
 				}
 				do_cmd_count++;
-
-				
-			}
-			if(do_cmd_count == MAX_DO_CMDS-1){
-				printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\n", MAX_DO_CMDS);
-			}
-		}
-		// Add multiple command
-		else if(strncmp(serial_buf, "adm", 3) == 0){
-
-			while(do_cmd_count < MAX_DO_CMDS-3){
-				unsigned int num_inputs = 0;
-				unsigned int num_pulses = 0;
-				uint32_t output;
-				uint32_t reps;
-				uint32_t waits;
-
-
-				do {
-				//Reading in the user input from the serial communication
-				buf_len = readline(serial_buf, SERIAL_BUFFER_SIZE);
-
-				// Check if the user inputted "end", and if so, exit add mode
-				if(buf_len >= 3){
-					if(strncmp(serial_buf, "end", 3) == 0){
-						break;
-					}
-				}
-
-				// Storing the inputted numbers into the output, reps, num
-				// pulses and waits variables, and stores the return value
-				// of sscanf (the number of variables successfully read)
-				// to determine if the user specified wait length or not 
-				num_inputs = sscanf(serial_buf, "%x %x %x %d", &output, &reps, &num_pulses, &waits);
-
-				} while (num_inputs < 3);
-
-				if(strncmp(serial_buf, "end", 3) == 0){
-					break;
-				}
-				// DEBUG MODE:
-				// Printing out what was stored from the user input, 
-				// specifically printing the output, number of reps,
-				// and number of pulses 
-				if (debug) {
-					printf("Output: %x\n", output);
-					printf("Number of Reps (Decimal): %d\n", reps);
-					printf("Number of Pulses (Decimal): %d\n", num_pulses);
-
-					if (num_inputs > 3) {
-						printf("Wait Length (Decimal): %d\n", waits);
-					}
-				}
-
-				// Adjusting the number of reps to match the 40ns delay
-				reps -= 4;
-
-				// If the user specified how long the wait is, adjust that
-				// for the initial 40ns delay, otherwise copy over the 
-				// number of reps to the number of waits
-				if (num_inputs < 4) {
-					waits = reps;
-				} else {
-					waits -= 4;
-				}
-				
-				// Looping through each pulse, adding it into memory and
-				// adding the waits between each pulse
-				while(num_pulses > 0) {
-					do_cmds[do_cmd_count] = output;
-					do_cmd_count++;
-
-					do_cmds[do_cmd_count] = reps;
-					do_cmd_count++;
-
-					do_cmds[do_cmd_count] = 0;
-					do_cmd_count++;
-
-					do_cmds[do_cmd_count] = waits;
-					do_cmd_count++;
-
-					num_pulses--;
-				}
 				
 			}
 			if(do_cmd_count == MAX_DO_CMDS-1){
@@ -518,42 +514,50 @@ int main(){
 					printf("\tWait\n");
 				}
 				else {
-					printf("\tnumber of reps: %d\n", do_cmds[i]+4);
+					printf("\treps: %x\n", do_cmds[i]+4);
 				}
 				
 			}
 		}
+		// Program length command: print number of instructions currently in program
+		else if (strncmp(serial_buf, "len", 3) == 0){
+			printf("Number of command lines: %d\n", do_cmd_count);
+			printf("Number of instructions: %d\n", do_cmd_count/2);
+		}
+		// Clk configuration command
+		// FORMAT: clk <src:0,1> <freq:int>
 		else if (strncmp(serial_buf, "clk", 3) == 0){
-			if (strncmp(serial_buf + 4, "ext", 3) == 0) {
-				// Sync the clock with the input from gpio pin 20
-				clock_configure_gpin(clk_sys, 20, 100000000, 100000000);
-				clk_status = EXTERNAL;
-			} else if (strncmp(serial_buf + 4, "int", 3) == 0) {
-				// Set the internal clock back to 100 MHz
-				set_sys_clock_khz(100000, false);
-
-				// Remove the clock sync from pin 20
-				gpio_set_function(20, GPIO_FUNC_NULL);
-
-				clk_status = INTERNAL;
-			} else if (strncmp(serial_buf + 4, "set", 3) == 0) {
-				unsigned int clock_freq;
-				// Read in the clock frequency requested
-				sscanf(serial_buf + 8, "%d", &clock_freq);
-				if (clk_status == INTERNAL) {
-					// If the clock is internal, set that clock to the requested
-					// frequency
-					set_sys_clock_khz(clock_freq / 1000, false);
+			unsigned int src; // 0 = internal, 1 = external (GPIO pin 20)
+			unsigned int freq; // in Hz (up to 133 MHz)
+			int parsed = sscanf(serial_buf, "%*s %u %u", &src, &freq);
+			// validation checks of the inputs
+			if (parsed < 2) {
+				printf("invalid clock request\n");
+				continue;
+			} else if (src > 2) {
+				printf("invalid clock source request\n");
+				continue;
+			} else if (freq > 133000000) {
+				printf("invalid clock frequency request\n");
+				continue;
+			}
+			// set new clock source and frequency
+			if (src == 0) { // internal
+				if (set_sys_clock_khz(freq / 1000, false)) {
+					printf("ok\n");
+					clk_status = INTERNAL;
 				} else {
-					// If the clock is external, set the expected and requested
-					// frequency to the inputted clock frequency
-					clock_configure_gpin(clk_sys, 20, clock_freq, clock_freq);
+					printf("Failure. Cannot exactly achieve that clock frequency\n");
 				}
+			} else { // external
+				clock_configure_gpin(clk_sys, 20, freq, freq);
+				clk_status = EXTERNAL;
+				printf("ok\n");
 			}
 		}
 		// Editing the current command with the instruction provided by the
 		// user 
-		// FORMAT: <output> <reps> <REPS = 0: Full Stop(0) or Indefinite Wait(1)>
+		// FORMAT: <output> <reps> <REPS = 0: Indefinite Wait>
 		else if (strncmp(serial_buf, "edt", 3) == 0) {
 			if (do_cmd_count > 0) {
 				uint32_t output;
@@ -565,7 +569,7 @@ int main(){
 				readline(serial_buf, SERIAL_BUFFER_SIZE);
 
 				// Storing the input from the user into the respective output,
-				// reps, and waits variables to be stored in memory
+				// and reps variables to be stored in memory
 				num_inputs = sscanf(serial_buf, "%x %x", &output, &reps);
 
 				} while (num_inputs < 2);
@@ -574,7 +578,10 @@ int main(){
 				do_cmds[do_cmd_count - 2] = output;
 				do_cmds[do_cmd_count - 1] = reps;
 
+			} else {
+				printf("No commands to edit\n");
 			}
+			printf("ok\n");
 		
 		}
 		// Printing out the latest digital output command added to the current 
