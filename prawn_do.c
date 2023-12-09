@@ -499,6 +499,71 @@ int main(){
 				fast_serial_printf("Too many DO commands (%d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\r\n", MAX_DO_CMDS);
 			}
 		}
+		// Add many command: read in a fixed number of binary integers without separation,
+		// append to command array
+		else if(strncmp(serial_buf, "adm", 3) == 0){
+			// Get how many instructions this adm command contains
+			uint32_t inst_count;
+			int parsed = sscanf(serial_buf, "%*s %x", &inst_count);
+			if(parsed < 1){
+				fast_serial_printf("Invalid request\r\n");
+			}
+
+			// Check that the instructions will fit in the do_cmds array
+			if(inst_count + do_cmd_count >= MAX_DO_CMDS - 3){
+				fast_serial_printf("Too many DO commands (%d + %d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\r\n", do_cmd_count, inst_count);
+			}
+
+			// It takes 6 bytes to describe an instruction: 2 bytes for values, 4 bytes for time
+			uint32_t inst_per_buffer = SERIAL_BUFFER_SIZE / 6;
+			// In this loop, we read nearly full serial buffers and load them into do_cmds.
+			while(inst_count > inst_per_buffer){
+				fast_serial_read(serial_buf, 6*inst_per_buffer);
+
+				for(int i = 0; i < inst_per_buffer; i++){
+					do_cmds[do_cmd_count] = (serial_buf[6*i+1] << 8) | serial_buf[6*i];
+					do_cmd_count++;
+					uint32_t reps = ((serial_buf[6*i+5] << 24)
+									 | (serial_buf[6*i+4] << 16)
+									 | (serial_buf[6*i+3] << 8)
+									 | serial_buf[6*i+2]);
+					if(reps < 5 && reps != 0){
+						fast_serial_printf("Reps must be 0 or greater than 4, got %x\r\n", reps);
+					}
+					if(reps != 0){
+						reps -= 4;
+					}
+					do_cmds[do_cmd_count] = reps;
+					do_cmd_count++;
+				}
+
+				inst_count -= inst_per_buffer;
+			}
+
+			// In this if statement, we read a final serial buffer and load it into do_cmds.
+			if(inst_count > 0){
+				fast_serial_read(serial_buf, 6*inst_count);
+
+				for(int i = 0; i < inst_count; i++){
+					do_cmds[do_cmd_count] = (serial_buf[6*i+1] << 8) | serial_buf[6*i];
+					do_cmd_count++;
+					uint32_t reps = ((serial_buf[6*i+5] << 24)
+									 | (serial_buf[6*i+4] << 16)
+									 | (serial_buf[6*i+3] << 8)
+									 | serial_buf[6*i+2]);
+					if(reps < 5 && reps != 0){
+						fast_serial_printf("Reps must be 0 or greater than 4, got %x\r\n", reps);
+					}
+					if(reps != 0){
+						reps -= 4;
+					}
+					do_cmds[do_cmd_count] = reps;
+					do_cmd_count++;
+				}
+			}
+
+			fast_serial_printf("ok\r\n");
+		}
 		// Dump command: print the currently loaded buffered outputs
 		else if(strncmp(serial_buf, "dmp", 3) == 0){
 			// Dump
