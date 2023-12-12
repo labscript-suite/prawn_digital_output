@@ -59,6 +59,13 @@ These commands must be run when the running status is `STOPPED`.
 * `get <address (in hex)>` - Gets instruction at address. Returns output word and number of clock cycles separated by a space, in same format as `set`.
 * `run` - Used to hardware start a programmed sequence (ie waits for external trigger before processing first instruction).
 * `swr` - Used to software start a programmed sequence (ie do not wait for a hardware trigger at sequence start).
+* `adm <number of instructions (in hex)>` - Enters mode for adding pulse instructions in binary.
+  * The number of instructions must be specified with the command. The Pi Pico will then wait for that enough bytes to fill that many instructions (6 times the number of instructions) to be read, and will not respond during this time unless there is an error. This mode can not be be terminated until that many bytes are read.
+  * Each instruction is specified by a 16 bit unsigned integer (little Endian, output 15 is most significant) specifying the state of the outputs and a 32 bit unsigned integer (little Endian) specifying the number of clock cycles.
+    * The number of clock cycles sets how long this state is held before the next instruction.
+    * If the number of clock cycles is 0, this indicates an indefinite wait.
+    Output word of this instruction is held until an external hardware trigger on pin 16 restarts program execution.
+    * If two successive commands have clock cycles of 0, this indicates the end of the program. Output word of this instruction is ignored.
 
 * `man <output word (in hex)>` - Manually change the output pins' states.
 * `gto` - Get the current output state. Returns states of pins 0-15 as a single hex number.
