@@ -11,21 +11,23 @@ pico_sdk_init()
 
 add_executable(prawn_do_project
         prawn_do.c
-		serial.c
+		fast_serial.c
         )
 
 pico_generate_pio_header(prawn_do_project
 ${CMAKE_CURRENT_LIST_DIR}/prawn_do.pio
 )
 
+target_include_directories(prawn_do_project PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
 target_link_libraries(prawn_do_project
     pico_multicore
     pico_stdlib
+    pico_unique_id
     hardware_dma
     hardware_pio
+    tinyusb_device
+    tinyusb_board
 )
-
-pico_enable_stdio_usb(prawn_do_project 1)
-pico_enable_stdio_uart(prawn_do_project 0)
 
 pico_add_extra_outputs(prawn_do_project)
