@@ -106,3 +106,22 @@ end\n
 
 <img width="470" alt="documentation" src="https://github.com/pmiller2022/prawn_digital_output/assets/75953337/932b784f-346f-4598-8679-b857578e0291">
 
+## Compiling the firmware
+
+If you want to make changes to the firmware, or want to compile it yourself (because you don't trust binary blobs from the internet), we provide a docker configuration to help you do that.
+
+1. Install docker desktop and make sure it is running (if you are on Windows, you may have to mess around a bit to get virtualisation working at an operating system level)
+2. Clone this repository
+3. Open a terminal with the current working directory set to the repository root (the `docker-compose.yaml`` file should be there)
+4. Run `docker compose build --pull` to build the docker container
+5. Run `docker compose up` to build the PrawnBlaster firmware.
+
+Step 4 will take a while as it has to build the docker container.
+If it is slow to download packages from the Ubuntu package repositories, consider providing an explicit apt mirror that is fast for you: `docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"`.
+
+If you want to change which version of the pico SDK it builds against, this is set in the `build/docker/Dockerfile` file.
+Just change the git tag of the pico SDK that gets cloned out by git, then rebuild the docker container (see step 4).
+
+Note once the docker container is built, you can run step 5 as many times as you like.
+You do not need to rebuild the container, even if you make changes to the source code.
+You only need to rebuild the docker container if you modify the `build/docker/Dockerfile` file.
