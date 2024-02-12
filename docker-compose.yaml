@@ -1,0 +1,11 @@
+name: prawn_do
+
+services:
+  buildfirmware:
+    build:
+      dockerfile: docker/Dockerfile
+    command: /bin/bash -c 'cmake .. && make'
+    volumes:
+      - .:/prawn_digital_output
+    working_dir: /prawn_digital_output/build
+    init: true
