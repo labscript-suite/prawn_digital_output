@@ -22,7 +22,7 @@
 #define OUTPUT_PIN_BASE 0
 #define OUTPUT_WIDTH 16
 // mask which bits we are using
-uint32_t output_mask = (OUTPUT_WIDTH - 1) << OUTPUT_PIN_BASE;
+uint32_t output_mask = ((1 << OUTPUT_WIDTH) - 1) << OUTPUT_PIN_BASE;
 
 #define MAX_DO_CMDS 60000
 // two DO CMDS per INSTRUCTION
