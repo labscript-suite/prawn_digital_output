@@ -183,64 +183,81 @@ void core1_entry() {
 	uint offset = pio_add_program(pio, &prawn_do_program); // load prawn_do PIO 
 														   // program
 
+	// initialize prawn_do PIO program on chosen PIO and state machine at 
+	// required offset
+	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
+
 	// signal core1 ready for commands
 	multicore_fifo_push_blocking(0);
 
 	while(1){
 		// wait for message from main core
-		uint32_t hwstart = multicore_fifo_pop_blocking();
+		uint32_t command = multicore_fifo_pop_blocking();
 
-		set_status(TRANSITION_TO_RUNNING);
-		if(debug){
-			fast_serial_printf("hwstart: %d\r\n", hwstart);
-		}
-		// (re)initialize prawn_do PIO program on chosen PIO and state machine at 
-		// required offset
-		pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
-		// start the state machine
-		start_sm(pio, sm, dma_chan, offset, hwstart);
-		set_status(RUNNING);
+		if(command == 0 || command == 1){
+			// buffered execution
+			uint32_t hwstart = command;
 
-		// can save IRQ PIO instruction by using the following check instead
-		//while ((dma_channel_is_busy(dma_chan) // checks if dma finished
-		//        || pio_sm_is_tx_fifo_empty(pio, sm)) // ensure fifo is empty once dma finishes
-		//	     && get_status() != ABORT_REQUESTED) // breaks if Abort requested
-		while (!pio_interrupt_get(pio, sm) // breaks if PIO program reaches end
-			   && get_status() != ABORT_REQUESTED // breaks if Abort requested
-			   ){
-			// tight loop checking for run completion
-			// exits if program signals IRQ (at end) or abort requested
-			continue;
-		}
-		// ensure interrupt is cleared
-		pio_interrupt_clear(pio, sm);
-
-		if(debug){
-			fast_serial_printf("Tight execution loop ended\r\n");
-			uint8_t pc = pio_sm_get_pc(pio, sm);
-			fast_serial_printf("Program ended at instr %d\r\n", pc-offset);
-		}
-
-		if(get_status() == ABORT_REQUESTED){
-			set_status(ABORTING);
-			stop_sm(pio, sm, dma_chan);
-			set_status(ABORTED);
+			set_status(TRANSITION_TO_RUNNING);
 			if(debug){
-				fast_serial_printf("Aborted execution\r\n");
+				fast_serial_printf("hwstart: %d\r\n", hwstart);
+			}
+			// start the state machine
+			start_sm(pio, sm, dma_chan, offset, hwstart);
+			set_status(RUNNING);
+
+			// can save IRQ PIO instruction by using the following check instead
+			//while ((dma_channel_is_busy(dma_chan) // checks if dma finished
+			//        || pio_sm_is_tx_fifo_empty(pio, sm)) // ensure fifo is empty once dma finishes
+			//	     && get_status() != ABORT_REQUESTED) // breaks if Abort requested
+			while (!pio_interrupt_get(pio, sm) // breaks if PIO program reaches end
+				&& get_status() != ABORT_REQUESTED // breaks if Abort requested
+				){
+				// tight loop checking for run completion
+				// exits if program signals IRQ (at end) or abort requested
+				continue;
+			}
+			// ensure interrupt is cleared
+			pio_interrupt_clear(pio, sm);
+
+			if(debug){
+				fast_serial_printf("Tight execution loop ended\r\n");
+				uint8_t pc = pio_sm_get_pc(pio, sm);
+				fast_serial_printf("Program ended at instr %d\r\n", pc-offset);
+			}
+
+			if(get_status() == ABORT_REQUESTED){
+				set_status(ABORTING);
+				stop_sm(pio, sm, dma_chan);
+				set_status(ABORTED);
+				if(debug){
+					fast_serial_printf("Aborted execution\r\n");
+				}
+			}
+			else{
+				set_status(TRANSITION_TO_STOP);
+				stop_sm(pio, sm, dma_chan);
+				set_status(STOPPED);
+				if(debug){
+					fast_serial_printf("Execution stopped\r\n");
+				}
+			}
+			if(debug){
+				fast_serial_printf("Core1 loop ended\r\n");
 			}
 		}
 		else{
-			set_status(TRANSITION_TO_STOP);
-			stop_sm(pio, sm, dma_chan);
-			set_status(STOPPED);
+			// manual update
+			uint32_t manual_state = command >> 1;
+			// put new state into the TX FIFO
+			pio_sm_put_blocking(pio, sm, manual_state);
+			// pull FIFO into scratch register and update pins
+			pio_sm_exec_wait_blocking(pio, sm, pio_encode_out(pio_pins, 32));
 			if(debug){
-				fast_serial_printf("Execution stopped\r\n");
+				fast_serial_printf("Output commanded: %x\r\n", manual_state);
 			}
+			
 		}
-		if(debug){
-			fast_serial_printf("Core1 loop ended\r\n");
-		}
-
 	}
 }
 int main(){
@@ -348,8 +365,8 @@ int main(){
 				fast_serial_printf("invalid request\r\n");
 			}
 			else{
-				configure_gpio();
-				gpio_put_masked(output_mask, manual_state);
+				// bit-shift state up by one to signal manual update
+				multicore_fifo_push_blocking(manual_state << 1);
 				fast_serial_printf("ok\r\n");
 			}
 		}
