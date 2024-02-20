@@ -185,7 +185,7 @@ void core1_entry() {
 
 	// initialize prawn_do PIO program on chosen PIO and state machine at 
 	// required offset
-	pio_sm_config pio_config = prawn_do_program_init(pio, sm, 1.f, offset);
+	pio_sm_config pio_config = prawn_do_program_init(pio, sm, offset);
 
 	// signal core1 ready for commands
 	multicore_fifo_push_blocking(0);
