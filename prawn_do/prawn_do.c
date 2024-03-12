@@ -69,12 +69,6 @@ void set_status(int new_status)
 	mutex_exit(&status_mutex);
 }
 
-void configure_gpio()
-{
-	gpio_init_mask(output_mask);
-	gpio_set_dir_out_masked(output_mask);
-}
-
 /*
   Start pio state machine
 
