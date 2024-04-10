@@ -23,6 +23,12 @@
 #define OUTPUT_WIDTH 16
 // mask which bits we are using
 uint32_t output_mask = ((1 << OUTPUT_WIDTH) - 1) << OUTPUT_PIN_BASE;
+// command type enum
+enum COMMAND {
+	BUFFERED_HWSTART = 3 << OUTPUT_WIDTH,
+	BUFFERED = 1 << OUTPUT_WIDTH,
+	MANUAL = 0
+};
 
 #define MAX_DO_CMDS 60000
 // two DO CMDS per INSTRUCTION
@@ -188,9 +194,9 @@ void core1_entry() {
 		// wait for message from main core
 		uint32_t command = multicore_fifo_pop_blocking();
 
-		if(command == 0 || command == 1){
+		if(command & BUFFERED){
 			// buffered execution
-			uint32_t hwstart = command;
+			uint32_t hwstart = (command & BUFFERED_HWSTART);
 
 			set_status(TRANSITION_TO_RUNNING);
 			if(debug){
@@ -242,7 +248,7 @@ void core1_entry() {
 		}
 		else{
 			// manual update
-			uint32_t manual_state = command >> 1;
+			uint32_t manual_state = command;
 			// put new state into the TX FIFO
 			pio_sm_put_blocking(pio, sm, manual_state);
 			// pull FIFO into scratch register and update pins
@@ -343,12 +349,12 @@ int main(){
 		}
 		// Run command: start state machine
 		else if(strncmp(serial_buf, "run", 3) == 0){
-			multicore_fifo_push_blocking(1);
+			multicore_fifo_push_blocking(BUFFERED_HWSTART);
 			fast_serial_printf("ok\r\n");
 		}
 		// Software start: start state machine without waiting for trigger
 		else if(strncmp(serial_buf, "swr", 3) == 0){
-			multicore_fifo_push_blocking(0);
+			multicore_fifo_push_blocking(BUFFERED);
 			fast_serial_printf("ok\r\n");
 		}
 		// Manual update of outputs
@@ -360,7 +366,7 @@ int main(){
 			}
 			else{
 				// bit-shift state up by one to signal manual update
-				multicore_fifo_push_blocking(manual_state << 1);
+				multicore_fifo_push_blocking(manual_state);
 				fast_serial_printf("ok\r\n");
 			}
 		}
