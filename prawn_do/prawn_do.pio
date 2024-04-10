@@ -4,10 +4,6 @@
 .define public OUTPUT_PIN_BASE 0 ; first pin to output from
 .define public OUTPUT_WIDTH 16 ; number of pins to output from
 
-; Immediately output the first entry so the outputs could be manually triggered
-;out pins, 32
-; pop off dummy reps value from OSR
-;out X, 32
 
 start:
 	;wait 1 gpio TRIGGER_PIN
@@ -65,8 +61,8 @@ end_loop:
 
 				   
 % c-sdk {
-pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, float div, 
-	uint offset){
+pio_sm_config prawn_do_program_init(PIO pio, uint state_machine, uint offset){
+
 	// Set pin direction of output pins to outputs
 	pio_sm_set_consecutive_pindirs(pio, state_machine,
 								   prawn_do_OUTPUT_PIN_BASE,
