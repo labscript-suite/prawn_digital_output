@@ -519,17 +519,21 @@ int main(){
 		// Add many command: read in a fixed number of binary integers without separation,
 		// append to command array
 		else if(strncmp(serial_buf, "adm", 3) == 0){
-			// Get how many instructions this adm command contains
+			// Get how many instructions this adm command contains and where to insert them
+			uint32_t start_addr;
 			uint32_t inst_count;
-			int parsed = sscanf(serial_buf, "%*s %x", &inst_count);
-			if(parsed < 1){
+			int parsed = sscanf(serial_buf, "%*s %x %x", &start_addr, &inst_count);
+			if(parsed < 2){
 				fast_serial_printf("Invalid request\r\n");
 			}
 
 			// Check that the instructions will fit in the do_cmds array
-			if(inst_count + do_cmd_count >= MAX_DO_CMDS - 3){
-				fast_serial_printf("Too many DO commands (%d + %d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\r\n", do_cmd_count, inst_count);
+			if(inst_count + start_addr >= MAX_DO_CMDS - 3){
+				fast_serial_printf("Invalid address and/or too many instructions (%d + %d).\r\n", start_addr, inst_count);
 			}
+
+			// reset do_cmd_count to start_address
+			do_cmd_count = start_addr * 2;
 
 			// It takes 6 bytes to describe an instruction: 2 bytes for values, 4 bytes for time
 			uint32_t inst_per_buffer = SERIAL_BUFFER_SIZE / 6;
