@@ -528,7 +528,7 @@ int main(){
 			}
 
 			// Check that the instructions will fit in the do_cmds array
-			if(inst_count + start_addr >= MAX_DO_CMDS - 3){
+			if(inst_count + start_addr > MAX_INSTR){
 				fast_serial_printf("Invalid address and/or too many instructions (%d + %d).\r\n", start_addr, inst_count);
 			}
 
