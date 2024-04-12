@@ -525,11 +525,15 @@ int main(){
 			int parsed = sscanf(serial_buf, "%*s %x %x", &start_addr, &inst_count);
 			if(parsed < 2){
 				fast_serial_printf("Invalid request\r\n");
+				continue;
 			}
-
 			// Check that the instructions will fit in the do_cmds array
-			if(inst_count + start_addr > MAX_INSTR){
+			else if(inst_count + start_addr > MAX_INSTR){
 				fast_serial_printf("Invalid address and/or too many instructions (%d + %d).\r\n", start_addr, inst_count);
+				continue;
+			}
+			else{
+				fast_serial_printf("ready\r\n");
 			}
 
 			// reset do_cmd_count to start_address

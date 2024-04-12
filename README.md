@@ -107,6 +107,31 @@ end\n
 
 <img width="470" alt="documentation" src="https://github.com/pmiller2022/prawn_digital_output/assets/75953337/932b784f-346f-4598-8679-b857578e0291">
 
+This is a python script that employs the binary write `adm` command.
+In order to function correctly, the data to be written must be in a numpy structured array where each column dtype can be specified uniquely.
+Below assumes the `bits` and `cycles` are 1-D arrays that have already been created.
+It also assumes `do` is a pyserial handle to the device. 
+
+```python
+data = np.zeros(len(bits), dtype=[('bits', 'u2'), ('cycles','u4')])
+data['bits'] = bits
+data['cycles'] = cycles
+
+serial_buffer = data.tobytes()
+
+do.write(f'adm 0 {len(data):x}\r\n'.encode())
+resp = do.readline().decode()
+assert resp == 'ready\r\n', f'Not ready for binary data. Response was {repr(resp)}'
+do.write(serial_buffer)
+resp = do.readline().decode()
+if resp != 'ok\r\n':
+  # if response not ok, probably more than one line, read them all
+  # done this way to prevent readlines timeout for standard operation
+  extra_resp = do.readlines()
+  resp += ''.join([st.decode() for st in extra_resp])
+  print(f'Write had errors. Response was {repr(resp)}')
+```
+
 ## Compiling the firmware
 
 If you want to make changes to the firmware, or want to compile it yourself (because you don't trust binary blobs from the internet), we provide a docker configuration to help you do that.
