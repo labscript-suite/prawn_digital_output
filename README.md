@@ -61,7 +61,8 @@ These commands must be run when the running status is `STOPPED`.
 * `swr` - Used to software start a programmed sequence (ie do not wait for a hardware trigger at sequence start).
 * `adm <starting instruction address (in hex)> <number of instructions (in hex)>` - Enters mode for adding pulse instructions in binary.
   * This command over-writes any existing instructions in memory. The starting instruction address specifies where to insert the block of instructions. This is generally set to 0 to write a complete instruction set from scratch.
-  * The number of instructions must be specified with the command. The Pi Pico will then wait for enough bytes (6 times the number of instructions) to be read, and will not respond during this time unless there is an error. This mode can not be be terminated until that many bytes are read.
+  * The number of instructions must be specified with the command, which is used to determine the total number of bytes to be read (6 6 times the number of instructions).
+  * This command returns `Ready\r\n` to signify it is ready for binary data. The Pico will then read the total number of bytes. This mode can not be terminated until that many bytes are read.
   * Each instruction is specified by a 16 bit unsigned integer (little Endian, output 15 is most significant) specifying the state of the outputs and a 32 bit unsigned integer (little Endian) specifying the number of clock cycles.
     * The number of clock cycles sets how long this state is held before the next instruction.
     * If the number of clock cycles is 0, this indicates an indefinite wait.
@@ -86,25 +87,23 @@ The basis of the functionality for this serial interface was developed by Carter
 ## Clock Sync
 Firmware supports the use of an external clock. This prevents any significant phase slip between a pseudoclock and this digital output controller if their clocks are phase synchronous. Without external buffering hardware, clock must be LVCMOS compatible.
 
-## Example:
-Below program sets one output high for 1 microsecond, then low while setting the next output high for 1 microsecond (64 in hex = 100 in decimal) for 6 outputs, then stopping:
+## Examples:
+Below python script sets one output high for 1 microsecond, then low while setting the next output high for 1 microsecond (64 in hex = 100 in decimal) for 6 outputs, then stopping. `do` is a pyserial handle to the pico.
 
-Commands (`\n` explicitly denotes newline/pressing enter):
+```python
+bits = [1, 2, 3, 8, 10, 20, 0, 0]
+cycles = [100, 100, 100, 100, 100, 100, 0, 0]
 
-```
-add\n
-1 64\n
-2 64\n
-4 64\n
-8 64\n
-10 64\n
-20 64\n
-0 0\n
-0 0\n
-end\n
+do.write('add\n'.encode())
+for bit, cycle in zip(bits, cycles):
+  do.write(f'{bit:x} {cycle:x}\n'.encode())
+
+do.write('end\n'.encode())
+resp = do.readline().decode()
+assert resp == 'ok\r\n'
 ```
 
-
+Output of the above sequence.
 <img width="470" alt="documentation" src="https://github.com/pmiller2022/prawn_digital_output/assets/75953337/932b784f-346f-4598-8679-b857578e0291">
 
 This is a python script that employs the binary write `adm` command.
