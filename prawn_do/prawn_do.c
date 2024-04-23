@@ -519,17 +519,28 @@ int main(){
 		// Add many command: read in a fixed number of binary integers without separation,
 		// append to command array
 		else if(strncmp(serial_buf, "adm", 3) == 0){
-			// Get how many instructions this adm command contains
+			// Get how many instructions this adm command contains and where to insert them
+			uint32_t start_addr;
 			uint32_t inst_count;
-			int parsed = sscanf(serial_buf, "%*s %x", &inst_count);
-			if(parsed < 1){
+			int parsed = sscanf(serial_buf, "%*s %x %x", &start_addr, &inst_count);
+			if(parsed < 2){
 				fast_serial_printf("Invalid request\r\n");
+				continue;
+			}
+			// Check that the instructions will fit in the do_cmds array
+			else if(inst_count + start_addr > MAX_INSTR){
+				fast_serial_printf("Invalid address and/or too many instructions (%d + %d).\r\n", start_addr, inst_count);
+				continue;
+			}
+			else{
+				fast_serial_printf("ready\r\n");
 			}
 
-			// Check that the instructions will fit in the do_cmds array
-			if(inst_count + do_cmd_count >= MAX_DO_CMDS - 3){
-				fast_serial_printf("Too many DO commands (%d + %d). Please use resources more efficiently or increase MAX_DO_CMDS and recompile.\r\n", do_cmd_count, inst_count);
-			}
+			// reset do_cmd_count to start_address
+			do_cmd_count = start_addr * 2;
+
+			uint32_t reps_error_count = 0;
+			uint32_t last_reps_error_idx = 0;
 
 			// It takes 6 bytes to describe an instruction: 2 bytes for values, 4 bytes for time
 			uint32_t inst_per_buffer = SERIAL_BUFFER_SIZE / 6;
@@ -545,7 +556,9 @@ int main(){
 									 | (serial_buf[6*i+3] << 8)
 									 | serial_buf[6*i+2]);
 					if(reps < 5 && reps != 0){
-						fast_serial_printf("Reps must be 0 or greater than 4, got %x\r\n", reps);
+						reps_error_count++;
+						last_reps_error_idx = (do_cmd_count + 1) / 2;
+						reps = 0;
 					}
 					if(reps != 0){
 						reps -= 4;
@@ -569,7 +582,9 @@ int main(){
 									 | (serial_buf[6*i+3] << 8)
 									 | serial_buf[6*i+2]);
 					if(reps < 5 && reps != 0){
-						fast_serial_printf("Reps must be 0 or greater than 4, got %x\r\n", reps);
+						reps_error_count++;
+						last_reps_error_idx = (do_cmd_count + 1) / 2;
+						reps = 0;
 					}
 					if(reps != 0){
 						reps -= 4;
@@ -579,7 +594,12 @@ int main(){
 				}
 			}
 
-			fast_serial_printf("ok\r\n");
+			if(reps_error_count > 0){
+				fast_serial_printf("Invalid number of reps in %d instructions, most recent error at instruction %d. Setting reps to zero for these instructions.\r\n", reps_error_count, last_reps_error_idx);
+			}
+			else{
+				fast_serial_printf("ok\r\n");
+			}
 		}
 		// Dump command: print the currently loaded buffered outputs
 		else if(strncmp(serial_buf, "dmp", 3) == 0){
