@@ -62,7 +62,7 @@ These commands must be run when the running status is `STOPPED`.
 * `adm <starting instruction address (in hex)> <number of instructions (in hex)>` - Enters mode for adding pulse instructions in binary.
   * This command over-writes any existing instructions in memory. The starting instruction address specifies where to insert the block of instructions. This is generally set to 0 to write a complete instruction set from scratch.
   * The number of instructions must be specified with the command, which is used to determine the total number of bytes to be read (6 6 times the number of instructions).
-  * This command returns `Ready\r\n` to signify it is ready for binary data. The Pico will then read the total number of bytes. This mode can not be terminated until that many bytes are read.
+  * This command returns `ready\r\n` to signify it is ready for binary data. The Pico will then read the total number of bytes. This mode can not be terminated until that many bytes are read.
   * Each instruction is specified by a 16 bit unsigned integer (little Endian, output 15 is most significant) specifying the state of the outputs and a 32 bit unsigned integer (little Endian) specifying the number of clock cycles.
     * The number of clock cycles sets how long this state is held before the next instruction.
     * If the number of clock cycles is 0, this indicates an indefinite wait.
