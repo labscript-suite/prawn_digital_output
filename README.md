@@ -81,6 +81,7 @@ These commands must be run when the running status is `STOPPED`.
 
 * `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 133 MHz. Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
 * `frq` - Measure and print system frequencies.
+* `prg` - Equivalent to disconnecting the Pico, holding down the "bootsel" button, and reconnecting the Pico. Places the Pico into firmware flashing mode; the PrawnDO serial port should disappear and the Pico should mount as a mass storage device.
 
 The basis of the functionality for this serial interface was developed by Carter Turnbaugh.
 
