@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include "pico/bootrom.h"
 #include "pico/stdio.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -11,7 +12,6 @@
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
 #include "hardware/structs/clocks.h"
-
 
 
 #include "prawn_do.pio.h"
@@ -698,6 +698,10 @@ int main(){
 		// Measure system frequencies
 		else if(strncmp(serial_buf, "frq", 3) == 0) {
 			measure_freqs();
+		}
+		// Reboot into programming mode
+		else if(strncmp(serial_buf, "prg", 3) == 0) {
+			reset_usb_boot(0, 0);
 		}
 		else{
 			fast_serial_printf("Invalid command: %s\r\n", serial_buf);
