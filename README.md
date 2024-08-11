@@ -14,7 +14,7 @@ All timings are given relative to the default system clock of 100 MHz.
 * **Minimum Pulse Width**: 5 clock cycles (50 ns)
 * **Max Pulse Rate**: 1/10 system clock frequency (10 MHz)
 * **Maximum Pulse Width**: 2^32 - 1 clock cycles (42.94967295 s)
-* **Max Instructions**: 30,000 (23,000 inside Labscript due to ZMQ timeout)
+* **Max Instructions**: 30,000
 * Supports Indefinite Waits and Full Stops
 * Max system clock frequency of 133 MHz
 
