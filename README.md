@@ -22,6 +22,7 @@ All timings are given relative to the default system clock of 100 MHz.
 * **Max Instructions**: 60,000 (Pico 2 - RP2350) or 30,000 (Pico - RP2040)
 * Supports Indefinite Waits and Full Stops
 * Max system clock frequency of 150 MHz (Pico 2 - RP2350) or 133 MHz (Pico - RP2040)
+* Support for referencing the system clock to an external clock source to synchronise with other devices (officially limited to 50MHz on the Pico and Pico 2, but testing has shown it works up to 133MHz).
 
 ## Installing the .uf2 file
 Download the latest prawn_do.uf2 file:
