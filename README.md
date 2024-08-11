@@ -19,8 +19,7 @@ All timings are given relative to the default system clock of 100 MHz.
 * **Minimum Pulse Width**: 5 clock cycles (50 ns)
 * **Max Pulse Rate**: 1/10 system clock frequency (10 MHz)
 * **Maximum Pulse Width**: 2^32 - 1 clock cycles (42.94967295 s)
-* **Max Instructions (RP2350)**: 60,000 (23,000 inside Labscript due to ZMQ timeout)
-* **Max Instructions (RP2040)**: 30,000 (23,000 inside Labscript due to ZMQ timeout)
+* **Max Instructions**: 60,000 (Pico 2 - RP2350) or 30,000 (Pico - RP2040)
 * Supports Indefinite Waits and Full Stops
 * Max system clock frequency of 150 MHz (RP2350) or 133 MHz (RP2040)
 
