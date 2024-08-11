@@ -1,11 +1,30 @@
 name: prawn_do
 
 services:
-  buildfirmware:
+  prawn_do_firmware_base:
     build:
       dockerfile: docker/Dockerfile
-    command: /bin/bash -c 'cmake .. && make'
+    image: prawn_digital_output/build-firmware
     volumes:
       - .:/prawn_digital_output
-    working_dir: /prawn_digital_output/build
+    command: /bin/bash -c 'cp /pico/pico-sdk/external/pico_sdk_import.cmake /prawn_digital_output/'
+    container_name: prawn_do_firmware_base
+
+  build_rp2040_firmware:
+    image: prawn_digital_output/build-firmware
+    command: /bin/bash -c 'cmake .. -D PICO_PLATFORM=rp2040 && make'
+    volumes:
+      - .:/prawn_digital_output
+    working_dir: /prawn_digital_output/build_rp2040
     init: true
+    depends_on:
+      - prawn_do_firmware_base
+  build_rp2350_firmware:
+    image: prawn_digital_output/build-firmware
+    command: /bin/bash -c 'cmake .. -D PICO_PLATFORM=rp2350 && make'
+    volumes:
+      - .:/prawn_digital_output
+    working_dir: /prawn_digital_output/build_rp2350
+    init: true
+    depends_on:
+      - prawn_do_firmware_base
