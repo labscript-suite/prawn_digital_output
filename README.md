@@ -21,10 +21,13 @@ All timings are given relative to the default system clock of 100 MHz.
 * **Maximum Pulse Width**: 2^32 - 1 clock cycles (42.94967295 s)
 * **Max Instructions**: 60,000 (Pico 2 - RP2350) or 30,000 (Pico - RP2040)
 * Supports Indefinite Waits and Full Stops
-* Max system clock frequency of 150 MHz (RP2350) or 133 MHz (RP2040)
+* Max system clock frequency of 150 MHz (Pico 2 - RP2350) or 133 MHz (Pico - RP2040)
 
 ## Installing the .uf2 file
-Download the latest prawn_do.uf2 file: [Pico - RP2040](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2040.uf2), [Pico 2 - RP2350](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2350.uf2).
+Download the latest prawn_do.uf2 file:
+- [Pico 2 - RP2350](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2350.uf2)
+- [Pico - RP2040](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2040.uf2)
+
 On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
 The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
 Drag and drop the `.uf2` file into the mounted mass storage device.
@@ -90,7 +93,7 @@ These commands must be run when the running status is `STOPPED`.
 * `len` - Print total number of instructions in the programmed sequence.
 * `cls` - Clear the current sequence of programmed outputs.
 
-* `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 150 MHz (RP2350) or 133 MHz (RP2040). Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
+* `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 150 MHz (Pico 2 - RP2350) or 133 MHz (Pico - RP2040). Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
 * `frq` - Measure and print system frequencies.
 * `prg` - Equivalent to disconnecting the Pico, holding down the "bootsel" button, and reconnecting the Pico. Places the Pico into firmware flashing mode; the PrawnDO serial port should disappear and the Pico should mount as a mass storage device.
 
