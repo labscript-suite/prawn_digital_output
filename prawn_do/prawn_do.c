@@ -652,8 +652,9 @@ int main(){
 					fast_serial_printf("Failure. Cannot exactly achieve that clock frequency\r\n");
 				}
 			} else { // external
-				clock_configure_gpin(clk_sys, 20, freq, freq);
+				// update status first, then resus can correct of configuration fails
 				clk_status = EXTERNAL;
+				clock_configure_gpin(clk_sys, 20, freq, freq);
 				fast_serial_printf("ok\r\n");
 			}
 		}
