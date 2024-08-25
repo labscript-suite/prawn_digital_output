@@ -54,7 +54,7 @@ int status;
 #define EXTERNAL 1
 int clk_status = INTERNAL;
 unsigned short debug = 0;
-const char ver[6] = "1.2.0";
+const char ver[6] = "1.2.2";
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -652,8 +652,9 @@ int main(){
 					fast_serial_printf("Failure. Cannot exactly achieve that clock frequency\r\n");
 				}
 			} else { // external
-				clock_configure_gpin(clk_sys, 20, freq, freq);
+				// update status first, then resus can correct of configuration fails
 				clk_status = EXTERNAL;
+				clock_configure_gpin(clk_sys, 20, freq, freq);
 				fast_serial_printf("ok\r\n");
 			}
 		}
