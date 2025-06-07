@@ -16,16 +16,29 @@ RUN \
     apt install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib build-essential
 
 # Install Pico SDK into a new stage
-FROM base as buildtools
+FROM base AS buildtools
 
 # Install Pico SDK
 RUN \
     mkdir -p /pico/ && \
     cd /pico/ && \
-    git clone https://github.com/raspberrypi/pico-sdk.git --branch 2.0.0 && \
+    git clone https://github.com/raspberrypi/pico-sdk.git --branch 2.1.1 && \
     cd pico-sdk/ && \
     git submodule update --init && \
     cd /
     
 # Set the Pico SDK environment variable
 ENV PICO_SDK_PATH=/pico/pico-sdk/
+
+# Install picotool
+# ensure versions of sdk and picotool match
+RUN \
+    git clone https://github.com/raspberrypi/picotool.git --branch 2.1.1 && \
+    cd picotool && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make -j$(nproc) && \
+    cmake --install . && \
+    cd ../.. && \
+    rm -rf picotool
