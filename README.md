@@ -11,6 +11,12 @@ Pin 20 is reserved for optional external clock input.
 We support either the official [Raspberry Pi Pico (RP2040 chip)](https://www.raspberrypi.com/products/raspberry-pi-pico/) board or the official [Raspberry Pi Pico 2 (RP2350 chip)](https://www.raspberrypi.com/products/raspberry-pi-pico-2/) board.
 We recommend the Pico 2 (RP2350) board due to its faster clock and larger RAM.
 
+> [!CAUTION]
+> The RP2350 currently has a hardware design bug that impacts the operation of the internal pull-down resistor on GPIO pins configured as inputs.
+> This may impact the operation of the PrawnBlaster trigger inputs when using the RP2350, depending on the specs of your trigger. For full details, see errata E9 in the [RP2350 datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf).
+> The issue can usually be fixed by providing a suitably sized external pull-down resistor on the relevant input pins.
+> RP2040 based boards do not suffer from this issue (but have reduced timing and storage compared to the RP2350).
+
 ## Specs
 
 All timings are given relative to the default system clock of 100 MHz.
