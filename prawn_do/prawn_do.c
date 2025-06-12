@@ -313,8 +313,8 @@ int main(){
 		if(strncmp(serial_buf, "ver", 3) == 0) {
 			fast_serial_printf("Version: %s\r\n", ver);
 		}
-		if(strncmp(serial_buf, "brd", 3) == 0) {
-        	fast_serial_printf("board: pico%d\r\n", PRAWNDO_PICO_BOARD);
+		else if(strncmp(serial_buf, "brd", 3) == 0) {
+			fast_serial_printf("board: pico%d\r\n", PRAWNDO_PICO_BOARD);
 		}
 		// Status command: return running status
 		else if(strncmp(serial_buf, "sts", 3) == 0){
