@@ -24,7 +24,7 @@ jobs:
       - name: Upload firmware as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: prawnblaster-firmware-${{ github.sha }}
+          name: prawn_do-firmware-${{ github.sha }}
           path: build_*/prawn_do/*.uf2
 
       - name: Create release
