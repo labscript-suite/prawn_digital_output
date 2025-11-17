@@ -18,15 +18,16 @@
 #include "fast_serial.h"
 
 #define LED_PIN 25
-// output pins to use, much match pio
+// output pins to use, must match pio
 #define OUTPUT_PIN_BASE 0
 #define OUTPUT_WIDTH 16
 // mask which bits we are using
 uint32_t output_mask = ((1 << OUTPUT_WIDTH) - 1) << OUTPUT_PIN_BASE;
 // command type enum
 enum COMMAND {
-	BUFFERED_HWSTART = 3 << OUTPUT_WIDTH,
 	BUFFERED = 1 << OUTPUT_WIDTH,
+	HWSTART = 2 << OUTPUT_WIDTH,
+	BUFFERED_HWSTART = BUFFERED | HWSTART,
 	MANUAL = 0
 };
 
@@ -200,7 +201,7 @@ void core1_entry() {
 
 		if(command & BUFFERED){
 			// buffered execution
-			uint32_t hwstart = (command & BUFFERED_HWSTART);
+			uint32_t hwstart = (command & HWSTART);
 
 			set_status(TRANSITION_TO_RUNNING);
 			if(debug){
