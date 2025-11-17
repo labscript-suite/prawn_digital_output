@@ -417,6 +417,10 @@ int main(){
 					// reset if we just set a stop command (two reps=0 commands in a row)
 					do_cmd_count = do_cmd_addr + 2;
 				}
+				if (debug){
+					fast_serial_printf("NumNZ: %x, Arr Idx: %x, Output: %x, Reps: %x\r\n", 
+						do_cmd_count, do_cmd_addr, output, reps);
+				}
 				fast_serial_printf("ok\r\n");
 			}
 		}
