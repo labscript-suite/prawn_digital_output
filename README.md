@@ -6,6 +6,17 @@ This firmware turns pins 0-15 into programmable digital outputs. Their states ar
 
 Pin 20 is reserved for optional external clock input.
 
+## Supported boards
+
+We support either the official [Raspberry Pi Pico (RP2040 chip)](https://www.raspberrypi.com/products/raspberry-pi-pico/) board or the official [Raspberry Pi Pico 2 (RP2350 chip)](https://www.raspberrypi.com/products/raspberry-pi-pico-2/) board.
+We recommend the Pico 2 (RP2350) board due to its faster clock and larger RAM.
+
+> [!CAUTION]
+> The RP2350 currently has a hardware design bug that impacts the operation of the internal pull-down resistor on GPIO pins configured as inputs.
+> This may impact the operation of the PrawnBlaster trigger inputs when using the RP2350, depending on the specs of your trigger. For full details, see errata E9 in the [RP2350 datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf).
+> The issue can usually be fixed by providing a suitably sized external pull-down resistor on the relevant input pins.
+> RP2040 based boards do not suffer from this issue (but have reduced timing and storage compared to the RP2350).
+
 ## Specs
 
 All timings are given relative to the default system clock of 100 MHz.
@@ -14,12 +25,21 @@ All timings are given relative to the default system clock of 100 MHz.
 * **Minimum Pulse Width**: 5 clock cycles (50 ns)
 * **Max Pulse Rate**: 1/10 system clock frequency (10 MHz)
 * **Maximum Pulse Width**: 2^32 - 1 clock cycles (42.94967295 s)
-* **Max Instructions**: 30,000
+* **Max Instructions**: 60,000 (Pico 2 - RP2350) or 30,000 (Pico - RP2040)
 * Supports Indefinite Waits and Full Stops
-* Max system clock frequency of 133 MHz
+* Max system clock frequency of 150 MHz (Pico 2 - RP2350) or 133 MHz (Pico - RP2040)
+* Support for referencing the system clock to an external clock source to synchronise with other devices (officially limited to 50MHz on the Pico and Pico 2, but testing has shown it works up to 133MHz).
 
 ## Installing the .uf2 file
-Before plugging in usb, hold down the bootsel button, which should pop-up a window to drag/drop the .uf2 file into, and when that .uf2 file is added, the window should disappear.
+Download the latest prawn_do.uf2 file:
+- [Pico 2 - RP2350](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2350.uf2)
+- [Pico - RP2040](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2040.uf2)
+
+On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
+The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
+Drag and drop the `.uf2` file into the mounted mass storage device.
+The mass storage device should unmount after the copy completes.
+Your Pico is now running the Prawn Digital Output firmware!
 
 ## Serial Communication
 Commands must end with a newline character: `'\n'`.
@@ -43,6 +63,7 @@ These commands can be run at any time (ie during sequence execution).
 * `deb` - Turns on debugging mode which adds printed output when adding instructions. By default, debugging is off.
 * `ndb` - Turns off debugging mode.
 * `ver` - Displays the version of the PrawnDO code.
+* `brd` - Responds with a string containing the board version (`pico1` or `pico2`).
 * `abt` - Abort execution of a running sequence.
 
 These commands must be run when the running status is `STOPPED`.
@@ -79,7 +100,7 @@ These commands must be run when the running status is `STOPPED`.
 * `len` - Print total number of instructions in the programmed sequence.
 * `cls` - Clear the current sequence of programmed outputs.
 
-* `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 133 MHz. Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
+* `clk <src (0: internal, 1: external)> <freq (in decimal Hz)>` - Sets the system clock and frequency. Maximum frequency allowed is 150 MHz (Pico 2 - RP2350) or 133 MHz (Pico - RP2040). Default is 100 MHz internal clock. External clock frequency input is GPIO pin 20.
 * `frq` - Measure and print system frequencies.
 * `prg` - Equivalent to disconnecting the Pico, holding down the "bootsel" button, and reconnecting the Pico. Places the Pico into firmware flashing mode; the PrawnDO serial port should disappear and the Pico should mount as a mass storage device.
 
@@ -140,7 +161,7 @@ If you want to make changes to the firmware, or want to compile it yourself (bec
 2. Clone this repository
 3. Open a terminal with the current working directory set to the repository root (the `docker-compose.yaml`` file should be there)
 4. Run `docker compose build --pull` to build the docker container
-5. Run `docker compose up` to build the PrawnBlaster firmware.
+5. Run `docker compose up` to build the PrawnDO firmware.
 
 Step 4 will take a while as it has to build the docker container.
 If it is slow to download packages from the Ubuntu package repositories, consider providing an explicit apt mirror that is fast for you: `docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"`.
@@ -151,3 +172,8 @@ Just change the git tag of the pico SDK that gets cloned out by git, then rebuil
 Note once the docker container is built, you can run step 5 as many times as you like.
 You do not need to rebuild the container, even if you make changes to the source code.
 You only need to rebuild the docker container if you modify the `build/docker/Dockerfile` file.
+
+By default, running `docker compose up` builds the all variations of the firmware.
+If you only want to build for a specific board, run either `docker compose up build_rp2040_firmware` or `docker compose up build_rp2350_firmware`.
+
+The firmware will be located in `build_rp2xxx/prawn_do/prawn_do_rp2xxx.uf2` where `rp2xxx` will be either `rp2040` or `rp2350`.

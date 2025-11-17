@@ -24,8 +24,8 @@ jobs:
       - name: Upload firmware as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: prawnblaster-firmware-${{ github.sha }}
-          path: build/prawn_do/prawn_do.uf2
+          name: prawn_do-firmware-${{ github.sha }}
+          path: build_*/prawn_do/*.uf2
 
       - name: Create release
         if: (github.event_name == 'push' && contains(github.ref, '/tags'))
@@ -35,4 +35,5 @@ jobs:
           prerelease: false
           files: |
             LICENSE.txt
-            build/prawn_do/prawn_do.uf2
+            build_rp2040/prawn_do/prawn_do_rp2040.uf2
+            build_rp2350/prawn_do/prawn_do_rp2350.uf2

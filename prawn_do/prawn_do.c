@@ -30,9 +30,9 @@ enum COMMAND {
 	MANUAL = 0
 };
 
-#define MAX_DO_CMDS 60000
 // two DO CMDS per INSTRUCTION
-#define MAX_INSTR 30000
+#define MAX_INSTR PRAWNDO_NUM_INSTRUCTIONS
+#define MAX_DO_CMDS (2*MAX_INSTR)
 uint32_t do_cmds[MAX_DO_CMDS];
 uint32_t do_cmd_count = 0;
 
@@ -54,7 +54,7 @@ int status;
 #define EXTERNAL 1
 int clk_status = INTERNAL;
 unsigned short debug = 0;
-const char ver[6] = "1.2.2";
+const char ver[6] = "1.3.0";
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -142,7 +142,9 @@ void measure_freqs(void)
     uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
     uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
     uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
     uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+#endif
 
     fast_serial_printf("pll_sys = %dkHz\r\n", f_pll_sys);
     fast_serial_printf("pll_usb = %dkHz\r\n", f_pll_usb);
@@ -151,7 +153,9 @@ void measure_freqs(void)
     fast_serial_printf("clk_peri = %dkHz\r\n", f_clk_peri);
     fast_serial_printf("clk_usb = %dkHz\r\n", f_clk_usb);
     fast_serial_printf("clk_adc = %dkHz\r\n", f_clk_adc);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
     fast_serial_printf("clk_rtc = %dkHz\r\n", f_clk_rtc);
+#endif
 }
 
 /* Resusitation function that restarts the clock internally if there are any 
@@ -268,9 +272,6 @@ int main(){
 	// Setup serial
 	fast_serial_init();
 
-	// Initialize clock functions
-	clocks_init();
-
 	// By default, set the system clock to 100 MHz
 	set_sys_clock_khz(100000, false);
 
@@ -311,6 +312,9 @@ int main(){
 		// // These commands are allowed during buffered execution
 		if(strncmp(serial_buf, "ver", 3) == 0) {
 			fast_serial_printf("Version: %s\r\n", ver);
+		}
+		else if(strncmp(serial_buf, "brd", 3) == 0) {
+			fast_serial_printf("board: pico%d\r\n", PRAWNDO_PICO_BOARD);
 		}
 		// Status command: return running status
 		else if(strncmp(serial_buf, "sts", 3) == 0){
@@ -630,7 +634,7 @@ int main(){
 		// FORMAT: clk <src:0,1> <freq:int>
 		else if (strncmp(serial_buf, "clk", 3) == 0){
 			unsigned int src; // 0 = internal, 1 = external (GPIO pin 20)
-			unsigned int freq; // in Hz (up to 133 MHz)
+			unsigned int freq; // in Hz (up to 133 MHz or 150 MHz depending on board)
 			int parsed = sscanf(serial_buf, "%*s %u %u", &src, &freq);
 			// validation checks of the inputs
 			if (parsed < 2) {
@@ -639,7 +643,13 @@ int main(){
 			} else if (src > 2) {
 				fast_serial_printf("invalid clock source request\r\n");
 				continue;
+#if PRAWNDO_PICO_BOARD == 1
 			} else if (freq > 133000000) {
+#elif PRAWNDO_PICO_BOARD == 2
+			} else if (freq > 150000000) {
+#else
+#    error "Unsupported PICO_BOARD"
+#endif // PRAWNDO_PICO_BOARD
 				fast_serial_printf("invalid clock frequency request\r\n");
 				continue;
 			}
