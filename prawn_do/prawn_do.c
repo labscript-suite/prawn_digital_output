@@ -253,10 +253,7 @@ void core1_entry() {
 		else{
 			// manual update
 			uint32_t manual_state = command;
-			// put new state into the TX FIFO
-			pio_sm_put_blocking(pio, sm, manual_state);
-			// pull FIFO into scratch register and update pins
-			pio_sm_exec_wait_blocking(pio, sm, pio_encode_out(pio_pins, 32));
+			pio_sm_set_pins_with_mask(pio, sm, manual_state, output_mask);
 			if(debug){
 				fast_serial_printf("Output commanded: %x\r\n", manual_state);
 			}
