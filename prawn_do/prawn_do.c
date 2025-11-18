@@ -201,7 +201,7 @@ void core1_entry() {
 
 		if(command & BUFFERED){
 			// buffered execution
-			uint32_t hwstart = (command & HWSTART);
+			uint32_t hwstart = !!(command & HWSTART);
 
 			set_status(TRANSITION_TO_RUNNING);
 			if(debug){
