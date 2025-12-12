@@ -18,15 +18,16 @@
 #include "fast_serial.h"
 
 #define LED_PIN 25
-// output pins to use, much match pio
+// output pins to use, must match pio
 #define OUTPUT_PIN_BASE 0
 #define OUTPUT_WIDTH 16
 // mask which bits we are using
 uint32_t output_mask = ((1 << OUTPUT_WIDTH) - 1) << OUTPUT_PIN_BASE;
 // command type enum
 enum COMMAND {
-	BUFFERED_HWSTART = 3 << OUTPUT_WIDTH,
 	BUFFERED = 1 << OUTPUT_WIDTH,
+	HWSTART = 2 << OUTPUT_WIDTH,
+	BUFFERED_HWSTART = BUFFERED | HWSTART,
 	MANUAL = 0
 };
 
@@ -54,7 +55,7 @@ int status;
 #define EXTERNAL 1
 int clk_status = INTERNAL;
 unsigned short debug = 0;
-const char ver[6] = "1.3.0";
+const char ver[6] = "1.3.1";
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -200,7 +201,7 @@ void core1_entry() {
 
 		if(command & BUFFERED){
 			// buffered execution
-			uint32_t hwstart = (command & BUFFERED_HWSTART);
+			uint32_t hwstart = !!(command & HWSTART);
 
 			set_status(TRANSITION_TO_RUNNING);
 			if(debug){
@@ -253,10 +254,7 @@ void core1_entry() {
 		else{
 			// manual update
 			uint32_t manual_state = command;
-			// put new state into the TX FIFO
-			pio_sm_put_blocking(pio, sm, manual_state);
-			// pull FIFO into scratch register and update pins
-			pio_sm_exec_wait_blocking(pio, sm, pio_encode_out(pio_pins, 32));
+			pio_sm_set_pins_with_mask(pio, sm, manual_state, output_mask);
 			if(debug){
 				fast_serial_printf("Output commanded: %x\r\n", manual_state);
 			}
@@ -418,6 +416,10 @@ int main(){
 				else if(reps == 0 && addr != 0 && do_cmds[do_cmd_addr-1] == 0){
 					// reset if we just set a stop command (two reps=0 commands in a row)
 					do_cmd_count = do_cmd_addr + 2;
+				}
+				if (debug){
+					fast_serial_printf("NumNZ: %x, Arr Idx: %x, Output: %x, Reps: %x\r\n", 
+						do_cmd_count, do_cmd_addr, output, reps);
 				}
 				fast_serial_printf("ok\r\n");
 			}
