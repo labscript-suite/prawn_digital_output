@@ -32,8 +32,8 @@ All timings are given relative to the default system clock of 100 MHz.
 
 ## Installing the .uf2 file
 Download the latest prawn_do.uf2 file:
-- [Pico 2 - RP2350](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2350.uf2)
-- [Pico - RP2040](https://github.com/labscript-suite/prawn_digital_out/releases/latest/download/prawn_do_rp2040.uf2)
+- [Pico 2 - RP2350](https://github.com/labscript-suite/prawn_digital_output/releases/latest/download/prawn_do_rp2350.uf2)
+- [Pico - RP2040](https://github.com/labscript-suite/prawn_digital_output/releases/latest/download/prawn_do_rp2040.uf2)
 
 On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
 The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
